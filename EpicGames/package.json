@@ -1,0 +1,20 @@
+{
+  "name": "epic-games-api-client",
+  "version": "1.0.0",
+  "description": "Epic Games Fortnite Creative API Client",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test/testAllEndpoints.js",
+    "test:quick": "node test/quickTest.js",
+    "test:discovery": "node test/testDiscoveryComplete.js",
+    "test:complete": "node test/testCompleteSystem.js",
+    "test:ecosystem": "node test/testEcosystemAPI.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {},
+  "author": "Anthony Walker",
+  "license": "MIT"
+}
