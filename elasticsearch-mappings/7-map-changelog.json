@@ -7,28 +7,137 @@
   "mappings": {
     "properties": {
       "map_id": { "type": "keyword" },
-      "version": { "type": "integer" },
-      "activated": { "type": "date" },
-      "changes_detected": {
+      "timestamp": { "type": "date" },
+      "changes": {
         "type": "object",
         "properties": {
-          "name_changed": { "type": "boolean" },
-          "tagline_changed": { "type": "boolean" },
-          "introduction_changed": { "type": "boolean" },
-          "tags_changed": { "type": "boolean" },
-          "image_changed": { "type": "boolean" },
-          "matchmaking_changed": { "type": "boolean" }
+          "title": {
+            "type": "object",
+            "properties": {
+              "old": { "type": "text" },
+              "new": { "type": "text" }
+            }
+          },
+          "description": {
+            "type": "object",
+            "properties": {
+              "old": { "type": "text" },
+              "new": { "type": "text" }
+            }
+          },
+          "tagline": {
+            "type": "object",
+            "properties": {
+              "old": { "type": "text" },
+              "new": { "type": "text" }
+            }
+          },
+          "creator": {
+            "type": "object",
+            "properties": {
+              "old": { "type": "keyword" },
+              "new": { "type": "keyword" }
+            }
+          },
+          "tags": {
+            "type": "object",
+            "properties": {
+              "old": { "type": "keyword" },
+              "new": { "type": "keyword" }
+            }
+          },
+          "matchmaking": {
+            "type": "object",
+            "properties": {
+              "old": {
+                "type": "object",
+                "properties": {
+                  "minPlayers": { "type": "integer" },
+                  "maxPlayers": { "type": "integer" }
+                }
+              },
+              "new": {
+                "type": "object",
+                "properties": {
+                  "minPlayers": { "type": "integer" },
+                  "maxPlayers": { "type": "integer" }
+                }
+              }
+            }
+          },
+          "active": {
+            "type": "object",
+            "properties": {
+              "old": { "type": "boolean" },
+              "new": { "type": "boolean" }
+            }
+          },
+          "image": {
+            "type": "object",
+            "properties": {
+              "old": { "type": "keyword" },
+              "new": { "type": "keyword" }
+            }
+          },
+          "version": {
+            "type": "object",
+            "properties": {
+              "old": { "type": "integer" },
+              "new": { "type": "integer" }
+            }
+          },
+          "published": {
+            "type": "object",
+            "properties": {
+              "old": { "type": "date" },
+              "new": { "type": "date" }
+            }
+          },
+          "genre": {
+            "type": "object",
+            "properties": {
+              "old": { "type": "keyword" },
+              "new": { "type": "keyword" }
+            }
+          },
+          "category": {
+            "type": "object",
+            "properties": {
+              "old": { "type": "keyword" },
+              "new": { "type": "keyword" }
+            }
+          },
+          "support_code": {
+            "type": "object",
+            "properties": {
+              "old": { "type": "keyword" },
+              "new": { "type": "keyword" }
+            }
+          },
+          "moderation_status": {
+            "type": "object",
+            "properties": {
+              "old": { "type": "keyword" },
+              "new": { "type": "keyword" }
+            }
+          },
+          "discovery_intent": {
+            "type": "object",
+            "properties": {
+              "old": { "type": "keyword" },
+              "new": { "type": "keyword" }
+            }
+          },
+          "link_state": {
+            "type": "object",
+            "properties": {
+              "old": { "type": "keyword" },
+              "new": { "type": "keyword" }
+            }
+          }
         }
       },
-      "previous_values": {
-        "type": "object",
-        "enabled": false
-      },
-      "new_values": {
-        "type": "object",
-        "enabled": false
-      },
-      "timestamp": { "type": "date" }
+      "source": { "type": "keyword" }
     }
   }
 }
