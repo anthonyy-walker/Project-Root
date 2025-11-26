@@ -8,28 +8,63 @@
     "properties": {
       "creator_id": { "type": "keyword" },
       "timestamp": { "type": "date" },
-      "changes": {
-        "type": "object",
+      "source": { "type": "keyword" },
+      "displayName": {
         "properties": {
-          "follower_count": {
-            "type": "object",
-            "properties": {
-              "old": { "type": "integer" },
-              "new": { "type": "integer" },
-              "delta": { "type": "integer" }
-            }
-          },
-          "bio_changed": { "type": "boolean" },
-          "avatar_changed": { "type": "boolean" },
-          "name_changed": { "type": "boolean" }
+          "Old": { "type": "text", "fields": { "keyword": { "type": "keyword" } } },
+          "New": { "type": "text", "fields": { "keyword": { "type": "keyword" } } }
         }
       },
-      "daily_stats": {
-        "type": "object",
+      "bio": {
         "properties": {
-          "total_ccu": { "type": "integer" },
-          "total_maps": { "type": "integer" },
-          "total_minutes_played": { "type": "long" }
+          "Old": { "type": "text" },
+          "New": { "type": "text" }
+        }
+      },
+      "avatar": {
+        "properties": {
+          "Old": { "type": "keyword" },
+          "New": { "type": "keyword" }
+        }
+      },
+      "banner": {
+        "properties": {
+          "Old": { "type": "keyword" },
+          "New": { "type": "keyword" }
+        }
+      },
+      "social": {
+        "properties": {
+          "youtube": {
+            "properties": {
+              "Old": { "type": "keyword" },
+              "New": { "type": "keyword" }
+            }
+          },
+          "twitter": {
+            "properties": {
+              "Old": { "type": "keyword" },
+              "New": { "type": "keyword" }
+            }
+          },
+          "twitch": {
+            "properties": {
+              "Old": { "type": "keyword" },
+              "New": { "type": "keyword" }
+            }
+          },
+          "instagram": {
+            "properties": {
+              "Old": { "type": "keyword" },
+              "New": { "type": "keyword" }
+            }
+          },
+          "tiktok": {
+            "properties": {
+              "Old": { "type": "keyword" },
+              "New": { "type": "keyword" }
+            }
+          }
         }
       }
     }

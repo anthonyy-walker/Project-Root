@@ -76,18 +76,48 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
     },
     {
-      name: 'worker-5-ecosystem-metrics',
-      script: './workers/aggregation/daily-aggregator.js',
+      name: 'worker-5a-ecosystem-hot',
+      script: './workers/aggregation/ecosystem-hot-maps.js',
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
       watch: false,
-      max_memory_restart: '1G',
+      max_memory_restart: '512M',
       env: {
         NODE_ENV: 'production'
       },
-      error_file: './logs/worker-5-ecosystem-error.log',
-      out_file: './logs/worker-5-ecosystem-out.log',
+      error_file: './logs/worker-5a-hot-error.log',
+      out_file: './logs/worker-5a-hot-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
+    },
+    {
+      name: 'worker-5b-ecosystem-warm',
+      script: './workers/aggregation/ecosystem-warm-maps.js',
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '512M',
+      env: {
+        NODE_ENV: 'production'
+      },
+      error_file: './logs/worker-5b-warm-error.log',
+      out_file: './logs/worker-5b-warm-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
+    },
+    {
+      name: 'worker-5c-ecosystem-cold',
+      script: './workers/aggregation/ecosystem-cold-maps.js',
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '512M',
+      env: {
+        NODE_ENV: 'production'
+      },
+      error_file: './logs/worker-5c-cold-error.log',
+      out_file: './logs/worker-5c-cold-out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
     },
     {

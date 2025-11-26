@@ -21,8 +21,9 @@ const ES_HOST = process.env.ELASTICSEARCH_URL;
 const es = new Client({ node: ES_HOST });
 
 const BATCH_SIZE = 100; // Links Service supports 100 per request
-const PARALLEL_BATCHES = 20; // Process 20 batches in parallel (2000 maps at once!)
+const PARALLEL_BATCHES = 5; // Process 5 batches in parallel (500 maps at once) - reduced for rate limiting
 const ES_BULK_SIZE = 500; // Elasticsearch bulk operation size - balanced for network latency
+const BATCH_DELAY_MS = 100; // Delay between parallel batch groups (1 second)
 
 // Statistics
 const stats = {
@@ -225,6 +226,10 @@ async function seedMapsDatabase() {
     let allDocuments = [];
 
     for (let i = 0; i < allMapCodes.length; i += BATCH_SIZE * PARALLEL_BATCHES) {
+      // Add delay between batch groups to avoid rate limiting
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+      }
       const batchRoundStart = Date.now();
       
       // Create parallel batch promises

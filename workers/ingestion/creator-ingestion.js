@@ -19,7 +19,8 @@ require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 const ES_URL = process.env.ELASTICSEARCH_URL;
 const SCROLL_SIZE = 1000;
-const RATE_LIMIT_DELAY = 2000; // 2 seconds = 30/min
+const BATCH_SIZE = 24; // Process 24 creators in parallel (safer rate)
+const BATCH_DELAY = 60000; // Wait 1 minute (60 seconds) between batches
 const ERROR_RETRY_DELAY = 5000;
 
 const es = new Client({ node: ES_URL });
@@ -28,6 +29,7 @@ const es = new Client({ node: ES_URL });
 const stats = {
  processed: 0,
  updated: 0,
+ deleted: 0,
  errors: 0,
  changeDetected: 0,
  startTime: Date.now()
@@ -35,25 +37,107 @@ const stats = {
 
 /**
  * Detect changes between old and new creator data (POPS fields only)
+ * Only detects changes when POPS API actually provides data (not null/undefined)
+ * and that data differs from what we have stored
+ * Ignores changes to/from Epic's default placeholder images
+ * Returns null if old document has no display_name (creator not yet fully processed)
+ * Returns flat structure: { field_old: value, field_new: value }
  */
 function detectChanges(oldDoc, popsData) {
+ // If old document has no display_name, it hasn't been fully processed yet
+ // Don't log any changes on first real processing
+ if (!oldDoc.display_name) {
+   return null;
+ }
+ 
  const changes = {};
+ 
+ // Epic's default placeholder images - don't log changes involving these
+ const DEFAULT_AVATAR = 'https://cdn2.unrealengine.com/t-ui-creatorprofile-default-256x256-8d5feae6bc8e.png';
+ const DEFAULT_BANNER = 'https://cdn2.unrealengine.com/t-ui-creatorprofile-banner-fallbackerror-1920x1080-3f830cc95018.png';
 
- // Check display name
- if (popsData?.displayName && popsData.displayName !== oldDoc.display_name) {
- changes.display_name = { old: oldDoc.display_name, new: popsData.displayName };
+ // Check display_name - only if POPS provides one AND it's different
+ if (popsData?.displayName !== undefined && 
+     popsData.displayName !== null && 
+     popsData.displayName !== oldDoc.display_name) {
+   changes.displayName = {
+     Old: oldDoc.display_name || null,
+     New: popsData.displayName
+   };
  }
 
- // Check bio
- if (popsData?.bio && popsData.bio !== oldDoc.bio) {
- changes.bio = { old: oldDoc.bio, new: popsData.bio };
+ // Check bio - only if POPS provides one AND it's different
+ if (popsData?.bio !== undefined && 
+     popsData.bio !== null && 
+     popsData.bio !== oldDoc.bio) {
+   changes.bio = {
+     Old: oldDoc.bio || null,
+     New: popsData.bio
+   };
  }
 
- // Check social links
- const oldSocials = JSON.stringify(oldDoc.social || {});
- const newSocials = JSON.stringify(popsData?.social || {});
- if (oldSocials !== newSocials) {
- changes.social = { old: oldDoc.social, new: popsData?.social };
+ // Check avatar image - ignore if both are default placeholder OR old is null/default and new is default
+ if (popsData?.images?.avatar !== undefined &&
+     popsData.images.avatar !== null &&
+     popsData.images.avatar !== oldDoc.images?.avatar) {
+   const oldAvatar = oldDoc.images?.avatar || null;
+   const newAvatar = popsData.images.avatar;
+   
+   // Only log if:
+   // - Old is NOT null AND old is NOT default AND new is different
+   // - OR old is NOT default AND new is NOT default (both custom images changing)
+   // Skip if: null→default, default→default
+   const isOldDefault = !oldAvatar || oldAvatar === DEFAULT_AVATAR;
+   const isNewDefault = newAvatar === DEFAULT_AVATAR;
+   
+   if (!isOldDefault || !isNewDefault) {
+     changes.avatar = {
+       Old: oldAvatar,
+       New: newAvatar
+     };
+   }
+ }
+
+ // Check banner image - ignore if both are default placeholder OR old is null/default and new is default
+ if (popsData?.images?.banner !== undefined &&
+     popsData.images.banner !== null &&
+     popsData.images.banner !== oldDoc.images?.banner) {
+   const oldBanner = oldDoc.images?.banner || null;
+   const newBanner = popsData.images.banner;
+   
+   // Only log if:
+   // - Old is NOT null AND old is NOT default AND new is different
+   // - OR old is NOT default AND new is NOT default (both custom images changing)
+   // Skip if: null→default, default→default
+   const isOldDefault = !oldBanner || oldBanner === DEFAULT_BANNER;
+   const isNewDefault = newBanner === DEFAULT_BANNER;
+   
+   if (!isOldDefault || !isNewDefault) {
+     changes.banner = {
+       Old: oldBanner,
+       New: newBanner
+     };
+   }
+ }
+
+ // Check social links - only track if they're actually different
+ if (popsData?.social) {
+   const oldSocial = oldDoc.social || {};
+   const newSocial = popsData.social || {};
+   
+   // Check each platform individually for better changelog granularity
+   ['youtube', 'twitter', 'twitch', 'instagram', 'tiktok'].forEach(platform => {
+     const oldValue = oldSocial[platform] || null;
+     const newValue = newSocial[platform] || null;
+     
+     if (newValue !== oldValue) {
+       if (!changes.social) changes.social = {};
+       changes.social[platform] = {
+         Old: oldValue,
+         New: newValue
+       };
+     }
+   });
  }
 
  return Object.keys(changes).length > 0 ? changes : null;
@@ -69,7 +153,33 @@ async function processCreator(creatorId) {
  const accountId = await getAccountId();
 
  // Fetch POPS data (profile, followers, etc)
- const popsData = await getCreatorDetails(creatorId, accessToken, accountId);
+ let popsData;
+ try {
+   popsData = await getCreatorDetails(creatorId, accessToken, accountId);
+ } catch (error) {
+   // If 404, creator doesn't exist - delete from our database
+   if (error.response?.status === 404) {
+     console.log(`🗑️  Creator ${creatorId} not found (404) - deleting from database`);
+     
+     try {
+       await es.delete({
+         index: 'creators',
+         id: creatorId
+       });
+       stats.deleted++;
+       console.log(`✅ Deleted creator ${creatorId}`);
+     } catch (deleteError) {
+       if (deleteError.meta?.statusCode !== 404) {
+         console.error(`❌ Error deleting creator ${creatorId}:`, deleteError.message);
+       }
+     }
+     
+     return false;
+   }
+   
+   // For other errors, rethrow
+   throw error;
+ }
 
  if (!popsData) {
  // Creator doesn't have a POPS profile - skip
@@ -131,22 +241,19 @@ async function processCreator(creatorId) {
  }
 
  if (changes) {
- stats.changeDetected++;
+   stats.changeDetected++;
 
- // Log to changelog (non-follower changes only)
- await es.index({
- index: 'creator-changelog',
- body: {
- creator_id: creatorId,
- snapshot: updateDoc,
- changes: changes,
- timestamp: new Date(),
- source: 'creator_ingestion_worker'
- }
- });
- }
-
- // Update creator document
+   // Log to changelog with flat structure (field_old, field_new format)
+   await es.index({
+     index: 'creator-changelog',
+     body: {
+       creator_id: creatorId,
+       ...changes, // Spread changes directly into body for flat structure
+       timestamp: new Date(),
+       source: 'creator_ingestion_worker'
+     }
+   });
+ } // Update creator document
  await es.index({
  index: 'creators',
  id: creatorId,
@@ -196,36 +303,21 @@ async function runWorker() {
  const totalCreators = searchResponse.hits.total.value;
  console.log(` Total creators to process: ${totalCreators.toLocaleString()}`);
 
- // Process creators one at a time (rate limited)
- let allCreators = searchResponse.hits.hits.map(h => h._source.id);
+ // Collect all creator IDs
+ let allCreatorIds = searchResponse.hits.hits.map(h => h._source.id);
 
+ // Continue scrolling to get all creators
  while (true) {
- // Process current batch
- for (const creatorId of allCreators) {
- await processCreator(creatorId);
- stats.processed++;
-
- // Log progress every 30 creators (1 minute)
- if (stats.processed % 30 === 0) {
- const elapsed = ((Date.now() - stats.startTime) / 1000 / 60).toFixed(1);
- const rate = (stats.processed / elapsed).toFixed(1);
- console.log(` Processed: ${stats.processed.toLocaleString()}/${totalCreators.toLocaleString()} | Rate: ${rate}/min | Updated: ${stats.updated} | Changes: ${stats.changeDetected} | Errors: ${stats.errors}`);
- }
-
- // Rate limit delay
- await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
- }
-
- // Get next scroll batch
  const scrollResponse = await es.scroll({
  scroll_id: scrollId,
  scroll: '5m'
  });
 
- allCreators = scrollResponse.hits.hits.map(h => h._source.id);
+ const moreCreators = scrollResponse.hits.hits.map(h => h._source.id);
  scrollId = scrollResponse._scroll_id;
 
- if (allCreators.length === 0) break;
+ if (moreCreators.length === 0) break;
+ allCreatorIds.push(...moreCreators);
  }
 
  // Clear scroll
@@ -233,11 +325,40 @@ async function runWorker() {
  await es.clearScroll({ scroll_id: scrollId });
  }
 
+ console.log(` Processing in batches of ${BATCH_SIZE} (30/min rate limit)\n`);
+
+ // Process creators in parallel batches of 30 with staggered delays
+ for (let i = 0; i < allCreatorIds.length; i += BATCH_SIZE) {
+   const batch = allCreatorIds.slice(i, i + BATCH_SIZE);
+   const batchStart = Date.now();
+
+   // Process batch with 2.5-second stagger between each request to avoid rate limits
+   // 24 requests * 2.5 seconds = 60 seconds total (24/min = safer than 30/min)
+   const promises = batch.map((creatorId, index) => {
+     return new Promise(async (resolve) => {
+       await new Promise(r => setTimeout(r, index * 2500)); // Stagger by 2.5 seconds each
+       const result = await processCreator(creatorId);
+       resolve(result);
+     });
+   });
+   await Promise.all(promises);
+
+   stats.processed += batch.length;
+
+   // Log progress after each batch
+   const elapsed = ((Date.now() - stats.startTime) / 1000 / 60).toFixed(1);
+   const rate = (stats.processed / elapsed).toFixed(1);
+   console.log(` Processed: ${stats.processed.toLocaleString()}/${totalCreators.toLocaleString()} | Rate: ${rate}/min | Updated: ${stats.updated} | Deleted: ${stats.deleted} | Changes: ${stats.changeDetected} | Errors: ${stats.errors}`);
+
+   // No additional wait needed since staggered delays already took ~60 seconds
+ }
+
  console.log('✓ Ingestion cycle complete\n');
 
  // Reset stats for next cycle
  stats.processed = 0;
  stats.updated = 0;
+ stats.deleted = 0;
  stats.changeDetected = 0;
  stats.startTime = Date.now();
 

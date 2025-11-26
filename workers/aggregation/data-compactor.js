@@ -6,15 +6,15 @@
  * Runs monthly to compact old data and reduce storage
  * 
  * ECOSYSTEM METRICS (map-metrics-history):
- * - Finds data older than 30 days
- * - Aggregates 24 hourly datapoints → 1 daily summary
- * - Reduces storage by ~24x for old data
+ * - Individual 10-minute datapoint documents (same structure as CCU)
+ * - 1 week old: 10min → 30min intervals
+ * - 1 month old: 30min → 1 hour intervals
+ * - 1 year old: 1 hour → 12 hour intervals
  * 
  * CCU DATA (concurrent-users-*):
- * - 1 day old: Keep every 10 minutes (raw data)
- * - 1 week old: Aggregate to every 30 minutes
- * - 1 month old: Aggregate to once per hour
- * - 1 year old: Aggregate to twice per day (12-hour intervals)
+ * - 1 week old: 10min → 30min intervals
+ * - 1 month old: 30min → 1 hour intervals
+ * - 1 year old: 1 hour → 12 hour intervals
  */
 
 const { Client } = require('@elastic/elasticsearch');
@@ -53,20 +53,24 @@ async function compactCCUData() {
   const oneYearAgo = new Date(now);
   oneYearAgo.setDate(oneYearAgo.getDate() - CCU_1_YEAR_DAYS);
 
-  // Get all concurrent-users-* indexes
-  const indexPattern = 'concurrent-users-*';
+  // Compact both CCU and ecosystem metrics (both use timestamp-based documents)
+  const indexes = ['concurrent-users-*', 'map-metrics-history'];
   
-  // Stage 1: 1 week old → 30 minute intervals (delete 2 out of every 3 documents)
-  console.log('\nStage 1: Aggregating 7-day old data to 30-minute intervals...');
-  await aggregateCCU(oneWeekAgo, oneMonthAgo, 30, indexPattern);
-  
-  // Stage 2: 1 month old → 1 hour intervals (delete every other 30min document)
-  console.log('\nStage 2: Aggregating 30-day old data to 1-hour intervals...');
-  await aggregateCCU(oneMonthAgo, oneYearAgo, 60, indexPattern);
-  
-  // Stage 3: 1 year old → 12 hour intervals (keep 2 per day)
-  console.log('\nStage 3: Aggregating 1-year old data to 12-hour intervals...');
-  await aggregateCCU(oneYearAgo, new Date('2000-01-01'), 720, indexPattern);
+  for (const indexPattern of indexes) {
+    console.log(`\nCompacting index: ${indexPattern}`);
+    
+    // Stage 1: 1 week old → 30 minute intervals (delete 2 out of every 3 documents)
+    console.log('\nStage 1: Aggregating 7-day old data to 30-minute intervals...');
+    await aggregateCCU(oneWeekAgo, oneMonthAgo, 30, indexPattern);
+    
+    // Stage 2: 1 month old → 1 hour intervals (delete every other 30min document)
+    console.log('\nStage 2: Aggregating 30-day old data to 1-hour intervals...');
+    await aggregateCCU(oneMonthAgo, oneYearAgo, 60, indexPattern);
+    
+    // Stage 3: 1 year old → 12 hour intervals (keep 2 per day)
+    console.log('\nStage 3: Aggregating 1-year old data to 12-hour intervals...');
+    await aggregateCCU(oneYearAgo, new Date('2000-01-01'), 720, indexPattern);
+  }
   
   console.log('\n✓ CCU compaction complete\n');
 }
