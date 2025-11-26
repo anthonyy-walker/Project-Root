@@ -1,0 +1,29 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 1,
+    "refresh_interval": "30s"
+  },
+  "mappings": {
+    "properties": {
+      "event_type": { "type": "keyword" },
+      "surface": { "type": "keyword" },
+      "panel": { "type": "keyword" },
+      "map_id": { "type": "keyword" },
+      "map_name": {
+        "type": "text",
+        "fields": { "keyword": { "type": "keyword" } }
+      },
+      "position": { "type": "integer" },
+      "previous_position": { "type": "integer" },
+      "timestamp": { "type": "date" },
+      "metadata": {
+        "type": "object",
+        "properties": {
+          "page": { "type": "integer" },
+          "panel_index": { "type": "integer" }
+        }
+      }
+    }
+  }
+}

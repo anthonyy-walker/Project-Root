@@ -1,0 +1,30 @@
+{
+  "settings": {
+    "number_of_shards": 2,
+    "number_of_replicas": 1,
+    "refresh_interval": "60s",
+    "index": {
+      "lifecycle": {
+        "name": "metrics-policy",
+        "rollover_alias": "map-metrics"
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "map_id": { "type": "keyword" },
+      "date": { "type": "date", "format": "yyyy-MM-dd" },
+      "favorites": { "type": "integer" },
+      "plays": { "type": "long" },
+      "sessions": { "type": "long" },
+      "unique_players": { "type": "integer" },
+      "recommendations": { "type": "integer" },
+      "average_minutes_per_player": { "type": "float" },
+      "retention_d1": { "type": "float" },
+      "retention_d7": { "type": "float" },
+      "total_minutes_played": { "type": "long" },
+      "source": { "type": "keyword" },
+      "timestamp": { "type": "date" }
+    }
+  }
+}

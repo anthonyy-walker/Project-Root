@@ -1,0 +1,29 @@
+{
+  "index_patterns": ["concurrent-users-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 1,
+      "refresh_interval": "30s",
+      "index": {
+        "lifecycle": {
+          "name": "ccu-policy",
+          "rollover_alias": "concurrent-users"
+        }
+      }
+    },
+    "mappings": {
+      "properties": {
+        "map_id": { "type": "keyword" },
+        "map_name": {
+          "type": "text",
+          "fields": { "keyword": { "type": "keyword" } }
+        },
+        "ccu": { "type": "integer" },
+        "timestamp": { "type": "date" },
+        "source": { "type": "keyword" },
+        "snapshot_interval": { "type": "keyword" }
+      }
+    }
+  }
+}

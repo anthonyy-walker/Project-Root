@@ -27,29 +27,75 @@ async function getMnemonicInfo(mnemonic, accessToken = null, namespace = "fn") {
   // Build the base URL for this mnemonic
   const baseUrl = buildUrl(ENDPOINTS.MNEMONIC_INFO, `${namespace}/mnemonic/${mnemonic}`);
   
-  try {
-    log.info(`Fetching mnemonic info for: ${mnemonic}`);
-    
-    // Start with "valkyrie:application" as the default type
-    const response = await fetchWithType(baseUrl, token, "valkyrie:application");
-    if (response && response.mnemonic) {
-      log.info(`Successfully found map for mnemonic: ${mnemonic}`);
+  // Try all three link types
+  const linkTypes = ["valkyrie:application", "Creative:Island", "ModeSet"];
+  const attemptedTypes = new Set();
+  
+  for (const linkType of linkTypes) {
+    if (attemptedTypes.has(linkType)) {
+      continue; // Skip if already tried
     }
-    return response;
-  } catch (error) {
-    if (error.response && error.response.status === 400) {
-      const { errorMessage } = error.response.data;
-      if (errorMessage.includes("Creative:Island")) {
-        log.info(`Retrying ${mnemonic} with type "Creative:Island"`);
-        return fetchWithType(baseUrl, token, "Creative:Island");
+    
+    try {
+      if (attemptedTypes.size === 0) {
+        log.info(`Fetching mnemonic info for: ${mnemonic}`);
       } else {
-        log.info(`Retrying ${mnemonic} with type "ModeSet"`);
-        return fetchWithType(baseUrl, token, "ModeSet");
+        log.info(`Retrying ${mnemonic} with type "${linkType}"`);
+      }
+      
+      attemptedTypes.add(linkType);
+      const response = await fetchWithType(baseUrl, token, linkType);
+      
+      if (response && response.mnemonic) {
+        log.info(`Successfully found map for mnemonic: ${mnemonic} with type "${linkType}"`);
+        return response;
+      }
+    } catch (error) {
+      // If it's a 400 error with wrong_link_type, extract the correct type and try it immediately
+      if (error.response && error.response.status === 400) {
+        const errorData = error.response.data;
+        const errorMessage = errorData.errorMessage || '';
+        
+        // Check if error message indicates the correct type
+        if (errorMessage.includes('wrong_link_type')) {
+          // Extract the actual type from error message
+          // Format: "Link: XXXX has type Creative:Island, but request specified valkyrie:application"
+          const typeMatch = errorMessage.match(/has type ([^,]+),/);
+          if (typeMatch && typeMatch[1]) {
+            const correctType = typeMatch[1];
+            
+            // If we haven't tried this type yet, try it immediately
+            if (!attemptedTypes.has(correctType)) {
+              log.info(`Error indicates correct type is "${correctType}", trying it now`);
+              try {
+                attemptedTypes.add(correctType);
+                const response = await fetchWithType(baseUrl, token, correctType);
+                if (response && response.mnemonic) {
+                  log.info(`Successfully found map for mnemonic: ${mnemonic} with type "${correctType}"`);
+                  return response;
+                }
+              } catch (retryError) {
+                // If this also fails, continue to next type in list
+                if (retryError.response && retryError.response.status !== 400) {
+                  // Non-400 error, give up
+                  log.error(`Failed to fetch mnemonic info for ${mnemonic}`, retryError);
+                  return null;
+                }
+              }
+            }
+          }
+        }
+        // Continue to next type in list
+      } else {
+        // Non-400 error (404, network error, etc) - give up
+        log.error(`Failed to fetch mnemonic info for ${mnemonic}`, error);
+        return null;
       }
     }
-    log.error(`Failed to fetch mnemonic info for ${mnemonic}`, error);
-    return null;
   }
+  
+  log.error(`Failed to fetch mnemonic info for ${mnemonic} - no valid type found after trying: ${Array.from(attemptedTypes).join(', ')}`);
+  return null;
 }
 
 /**

@@ -1,0 +1,37 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 1,
+    "refresh_interval": "60s"
+  },
+  "mappings": {
+    "properties": {
+      "creator_id": { "type": "keyword" },
+      "timestamp": { "type": "date" },
+      "changes": {
+        "type": "object",
+        "properties": {
+          "follower_count": {
+            "type": "object",
+            "properties": {
+              "old": { "type": "integer" },
+              "new": { "type": "integer" },
+              "delta": { "type": "integer" }
+            }
+          },
+          "bio_changed": { "type": "boolean" },
+          "avatar_changed": { "type": "boolean" },
+          "name_changed": { "type": "boolean" }
+        }
+      },
+      "daily_stats": {
+        "type": "object",
+        "properties": {
+          "total_ccu": { "type": "integer" },
+          "total_maps": { "type": "integer" },
+          "total_minutes_played": { "type": "long" }
+        }
+      }
+    }
+  }
+}

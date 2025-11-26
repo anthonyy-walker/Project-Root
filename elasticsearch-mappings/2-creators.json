@@ -1,0 +1,91 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 1,
+    "refresh_interval": "30s"
+  },
+  "mappings": {
+    "properties": {
+      "id": { "type": "keyword" },
+      "account_id": { "type": "keyword" },
+      "name": {
+        "type": "text",
+        "fields": { "keyword": { "type": "keyword" } }
+      },
+      "display_name": { "type": "keyword" },
+      "support_code": { "type": "keyword" },
+      "follower_count": { "type": "integer" },
+      "bio": { "type": "text" },
+      "avatar_url": { "type": "keyword", "index": false },
+      "socials": {
+        "type": "object",
+        "properties": {
+          "twitter": { "type": "keyword" },
+          "youtube": { "type": "keyword" },
+          "twitch": { "type": "keyword" },
+          "discord": { "type": "keyword" }
+        }
+      },
+      "total_maps": { "type": "integer" },
+      "published_maps": { "type": "integer" },
+      "total_ccu": { "type": "integer" },
+      "total_minutes_played": { "type": "long" },
+      "metrics": {
+        "type": "object",
+        "properties": {
+          "total_favorites": { "type": "long" },
+          "total_plays": { "type": "long" },
+          "total_unique_players": { "type": "long" },
+          "avg_retention_d1": { "type": "float" },
+          "avg_retention_d7": { "type": "float" },
+          "last_updated": { "type": "date" }
+        }
+      },
+      "performance": {
+        "type": "object",
+        "properties": {
+          "avg_ccu_24h": { "type": "integer" },
+          "avg_ccu_7d": { "type": "integer" },
+          "avg_ccu_30d": { "type": "integer" },
+          "peak_ccu_24h": { "type": "integer" },
+          "peak_ccu_7d": { "type": "integer" },
+          "peak_ccu_30d": { "type": "integer" }
+        }
+      },
+      "growth": {
+        "type": "object",
+        "properties": {
+          "follower_growth_24h": { "type": "integer" },
+          "follower_growth_7d": { "type": "integer" },
+          "follower_growth_30d": { "type": "integer" },
+          "ccu_growth_rate_24h": { "type": "float" },
+          "ccu_growth_rate_7d": { "type": "float" }
+        }
+      },
+      "ranking": {
+        "type": "object",
+        "properties": {
+          "global_rank": { "type": "integer" },
+          "follower_rank": { "type": "integer" },
+          "ccu_rank": { "type": "integer" }
+        }
+      },
+      "flags": {
+        "type": "object",
+        "properties": {
+          "is_verified": { "type": "boolean" },
+          "is_partner": { "type": "boolean" },
+          "is_trending": { "type": "boolean" }
+        }
+      },
+      "metadata": {
+        "type": "object",
+        "properties": {
+          "first_indexed": { "type": "date" },
+          "last_updated": { "type": "date" },
+          "last_pops_sync": { "type": "date" }
+        }
+      }
+    }
+  }
+}

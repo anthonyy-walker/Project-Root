@@ -1,0 +1,17 @@
+{
+  "name": "project-root",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@elastic/elasticsearch": "^8.15.0",
+    "axios": "^1.13.2",
+    "dotenv": "^17.2.3",
+    "node-cron": "^4.2.1"
+  }
+}
