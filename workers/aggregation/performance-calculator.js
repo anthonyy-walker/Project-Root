@@ -13,6 +13,7 @@
  */
 
 const { Client } = require('@elastic/elasticsearch');
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 const ES_HOST = process.env.ELASTICSEARCH_URL;
 const es = new Client({ node: ES_HOST });
