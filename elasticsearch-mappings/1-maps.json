@@ -4,7 +4,12 @@
     "number_of_replicas": 1,
     "index": {
       "max_result_window": 10000,
-      "refresh_interval": "5s"
+      "refresh_interval": "5s",
+      "mapping": {
+        "total_fields": {
+          "limit": 2000
+        }
+      }
     },
     "analysis": {
       "analyzer": {
@@ -163,6 +168,22 @@
           "is_epic_verified": { "type": "boolean" },
           "is_active": { "type": "boolean" }
         }
+      },
+      "localized_titles": {
+        "type": "object",
+        "enabled": false
+      },
+      "localized_descriptions": {
+        "type": "object",
+        "enabled": false
+      },
+      "localized_taglines": {
+        "type": "object",
+        "enabled": false
+      },
+      "raw_metadata": {
+        "type": "object",
+        "enabled": false
       },
       "metadata": {
         "type": "object",

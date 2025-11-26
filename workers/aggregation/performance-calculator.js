@@ -13,6 +13,7 @@
  */
 
 const { Client } = require('@elastic/elasticsearch');
+const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 const ES_HOST = process.env.ELASTICSEARCH_URL;
@@ -24,6 +25,10 @@ const BATCH_SIZE = 500; // Process 500 maps at a time
  * Calculate CCU metrics for a map
  */
 async function calculateCCUMetrics(mapId) {
+  if (!mapId) {
+    return null;
+  }
+
   const now = new Date();
   const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -117,6 +122,10 @@ async function calculateCCUMetrics(mapId) {
  * Calculate discovery metrics for a map
  */
 async function calculateDiscoveryMetrics(mapId) {
+  if (!mapId) {
+    return null;
+  }
+
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   try {
@@ -248,18 +257,27 @@ async function calculatePerformanceMetrics() {
   const startTime = Date.now();
 
   try {
-    // Get all map IDs
+    // Get all map IDs - use _id field since that's where the map code is stored
     const allMaps = await es.search({
       index: 'maps',
       size: 10000,
-      _source: ['code'],
+      _source: false, // We don't need the source, just the IDs
       body: {
         query: { match_all: {} }
       }
     });
 
-    const mapIds = allMaps.hits.hits.map(hit => hit._source.code);
+    // Extract IDs from hits - the map code is in _id
+    const mapIds = allMaps.hits.hits
+      .map(hit => hit._id)
+      .filter(id => id && id.match(/^\d{4}-\d{4}-\d{4}$/)); // Validate format
+    
     console.log(`Found ${mapIds.length} maps to process`);
+    
+    if (mapIds.length === 0) {
+      console.log('⚠️  No maps found with valid IDs');
+      return;
+    }
 
     let updated = 0;
 

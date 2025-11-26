@@ -90,13 +90,13 @@ function transformMapData(linksData, options = {}) {
     // Mode
     mode: linksData.metadata?.mode || 'live',
     
-    // Localized content (store for multi-language support)
+    // Localized content (store for multi-language support) - NOT indexed
     localizedTitles: linksData.metadata?.alt_title || {},
     localizedDescriptions: linksData.metadata?.alt_introduction || {},
     localizedTaglines: linksData.metadata?.alt_tagline || {},
     
-    // Store full metadata for future reference
-    metadata: linksData.metadata || {},
+    // Store full metadata for future reference - NOT indexed to avoid field explosion
+    rawMetadata: linksData.metadata || {},
     
     // Performance metrics (preserve existing if available, otherwise defaults)
     currentCCU: preservePerformance?.currentCCU || 0,
