@@ -22,9 +22,10 @@ const ES_HOST = process.env.ELASTICSEARCH_URL
 const BATCH_SIZE = 100; // Links Service supports 100 per request
 const SCROLL_SIZE = 10000; // ES scroll size - increased for faster fetching
 const ES_BULK_SIZE = 1000; // Elasticsearch bulk operation size - increased
-const PARALLEL_BATCHES = 40; // Process 40 batches in parallel (4000 maps at once!)
+const REQUESTS_PER_MINUTE = 10; // Rate limit: 10 requests per minute
+const BATCH_DELAY = (60 / REQUESTS_PER_MINUTE) * 1000; // Delay between requests (6 seconds)
+const PARALLEL_BATCHES = 1; // Sequential processing to respect rate limit
 const ERROR_RETRY_DELAY = 5000; // 5 seconds
-const BATCH_DELAY = 0; // No delay - API has no rate limit!
 
 // Initialize Elasticsearch client
 const es = new Client({ node: ES_HOST });
@@ -74,110 +75,103 @@ async function fetchExistingBulk(mapIds) {
 
 /**
  * Detect changes between old and new map data
- * Updated for new schema format
+ * Returns flat Old/New format matching creator-changelog structure
  */
 function detectChanges(oldDoc, newDoc) {
- const changes = {};
+ const changelog = {};
 
- // Check basic fields
- if (oldDoc.title !== newDoc.title) {
- changes.title = { old: oldDoc.title, new: newDoc.title };
+ // Get values from nested metadata if in new schema format
+ const getOldValue = (field) => {
+   if (field === 'title') return oldDoc.metadata?.title || oldDoc.title;
+   if (field === 'tagline') return oldDoc.metadata?.tagline || oldDoc.tagline;
+   if (field === 'introduction') return oldDoc.metadata?.introduction || oldDoc.description;
+   if (field === 'image_url') return oldDoc.metadata?.image_url || oldDoc.image;
+   if (field === 'genre_labels') return oldDoc.metadata?.genre_labels || oldDoc.genreLabels || [];
+   if (field === 'category_labels') return oldDoc.metadata?.category_labels || oldDoc.categoryLabels || [];
+   if (field === 'supportCode') return oldDoc.metadata?.supportCode || oldDoc.supportCode;
+   return oldDoc[field];
+ };
+
+ const getNewValue = (field) => {
+   if (field === 'title') return newDoc.metadata?.title;
+   if (field === 'tagline') return newDoc.metadata?.tagline;
+   if (field === 'introduction') return newDoc.metadata?.introduction;
+   if (field === 'image_url') return newDoc.metadata?.image_url;
+   if (field === 'genre_labels') return newDoc.metadata?.genre_labels || [];
+   if (field === 'category_labels') return newDoc.metadata?.category_labels || [];
+   if (field === 'supportCode') return newDoc.metadata?.supportCode;
+   return newDoc[field];
+ };
+
+ // Check basic fields - flat Old/New structure like creator-changelog
+ if (getOldValue('title') !== getNewValue('title')) {
+   changelog.title = { Old: getOldValue('title'), New: getNewValue('title') };
  }
- if (oldDoc.description !== newDoc.description) {
- changes.description = { old: oldDoc.description, new: newDoc.description };
+ 
+ if (getOldValue('introduction') !== getNewValue('introduction')) {
+   changelog.introduction = { Old: getOldValue('introduction'), New: getNewValue('introduction') };
  }
- if (oldDoc.tagline !== newDoc.tagline) {
- changes.tagline = { old: oldDoc.tagline, new: newDoc.tagline };
+ 
+ if (getOldValue('tagline') !== getNewValue('tagline')) {
+   changelog.tagline = { Old: getOldValue('tagline'), New: getNewValue('tagline') };
  }
 
  // Check creator
- if (oldDoc.creatorAccountId !== newDoc.creatorAccountId) {
- changes.creator = {
- old: oldDoc.creatorAccountId,
- new: newDoc.creatorAccountId
- };
+ if (oldDoc.accountId !== newDoc.accountId) {
+   changelog.creatorAccountId = { Old: oldDoc.accountId, New: newDoc.accountId };
+ }
+ 
+ if (oldDoc.creatorName !== newDoc.creatorName) {
+   changelog.creatorName = { Old: oldDoc.creatorName, New: newDoc.creatorName };
  }
 
- // Check tags
- const oldTags = (oldDoc.tags || []).sort().join(',');
- const newTags = (newDoc.tags || []).sort().join(',');
- if (oldTags !== newTags) {
- changes.tags = {
- old: oldDoc.tags || [],
- new: newDoc.tags || []
- };
- }
-
- // Check matchmaking
- if (oldDoc.minPlayers !== newDoc.minPlayers ||
- oldDoc.maxPlayers !== newDoc.maxPlayers) {
- changes.matchmaking = {
- old: { minPlayers: oldDoc.minPlayers, maxPlayers: oldDoc.maxPlayers },
- new: { minPlayers: newDoc.minPlayers, maxPlayers: newDoc.maxPlayers }
- };
- }
-
- // Check active status
- if (oldDoc.active !== newDoc.active) {
- changes.active = { old: oldDoc.active, new: newDoc.active };
- }
-
- // Check image
- if (oldDoc.image !== newDoc.image) {
- changes.image = { old: oldDoc.image, new: newDoc.image };
- }
-
- // Check version
- if (oldDoc.version !== newDoc.version) {
- changes.version = { old: oldDoc.version, new: newDoc.version };
- }
-
- // Check published date
- if (oldDoc.published !== newDoc.published) {
- changes.published = { old: oldDoc.published, new: newDoc.published };
- }
-
- // Check genre labels
- const oldGenre = (oldDoc.genreLabels || []).sort().join(',');
- const newGenre = (newDoc.genreLabels || []).sort().join(',');
+ // Check arrays (compare as strings for simplicity)
+ const oldGenre = (getOldValue('genre_labels') || []).sort().join(',');
+ const newGenre = (getNewValue('genre_labels') || []).sort().join(',');
  if (oldGenre !== newGenre) {
- changes.genre = {
- old: oldDoc.genreLabels || [],
- new: newDoc.genreLabels || []
- };
+   changelog.genreLabels = { Old: getOldValue('genre_labels'), New: getNewValue('genre_labels') };
  }
 
- // Check category labels
- const oldCategory = (oldDoc.categoryLabels || []).sort().join(',');
- const newCategory = (newDoc.categoryLabels || []).sort().join(',');
+ const oldCategory = (getOldValue('category_labels') || []).sort().join(',');
+ const newCategory = (getNewValue('category_labels') || []).sort().join(',');
  if (oldCategory !== newCategory) {
- changes.category = {
- old: oldDoc.categoryLabels || [],
- new: newDoc.categoryLabels || []
- };
+   changelog.categoryLabels = { Old: getOldValue('category_labels'), New: getNewValue('category_labels') };
  }
 
- // Check support code
- if (oldDoc.supportCode !== newDoc.supportCode) {
- changes.support_code = { old: oldDoc.supportCode, new: newDoc.supportCode };
+ // Check other important fields
+ if (oldDoc.active !== newDoc.active) {
+   changelog.active = { Old: oldDoc.active, New: newDoc.active };
  }
 
- // Check moderation status
+ if (getOldValue('image_url') !== getNewValue('image_url')) {
+   changelog.imageUrl = { Old: getOldValue('image_url'), New: getNewValue('image_url') };
+ }
+
+ if (oldDoc.version !== newDoc.version) {
+   changelog.version = { Old: oldDoc.version, New: newDoc.version };
+ }
+
+ if (oldDoc.published !== newDoc.published) {
+   changelog.published = { Old: oldDoc.published, New: newDoc.published };
+ }
+
+ if (getOldValue('supportCode') !== getNewValue('supportCode')) {
+   changelog.supportCode = { Old: getOldValue('supportCode'), New: getNewValue('supportCode') };
+ }
+
  if (oldDoc.moderationStatus !== newDoc.moderationStatus) {
- changes.moderation_status = { old: oldDoc.moderationStatus, new: newDoc.moderationStatus };
+   changelog.moderationStatus = { Old: oldDoc.moderationStatus, New: newDoc.moderationStatus };
  }
 
- // Check discovery intent
  if (oldDoc.discoveryIntent !== newDoc.discoveryIntent) {
- changes.discovery_intent = { old: oldDoc.discoveryIntent, new: newDoc.discoveryIntent };
+   changelog.discoveryIntent = { Old: oldDoc.discoveryIntent, New: newDoc.discoveryIntent };
  }
 
- // Check link state (LIVE, DISABLED, etc.)
  if (oldDoc.linkState !== newDoc.linkState) {
- changes.link_state = { old: oldDoc.linkState, new: newDoc.linkState };
+   changelog.linkState = { Old: oldDoc.linkState, New: newDoc.linkState };
  }
 
- return Object.keys(changes).length > 0 ? changes : null;
+ return Object.keys(changelog).length > 0 ? changelog : null;
 }
 
 /**
@@ -244,13 +238,15 @@ async function processBatch(mapIds, existingDocs) {
  if (existing) {
  const changeSet = detectChanges(existing, newDoc);
  if (changeSet) {
- changes.push({
- map_id: mapId,
- timestamp: new Date().toISOString(),
- changes: changeSet,
- source: 'map_ingestion_bulk'
- });
- stats.changeDetected++;
+   // Flat format like creator-changelog: each field is at top level with Old/New
+   const changelogEntry = {
+     map_id: mapId,
+     timestamp: new Date().toISOString(),
+     source: 'map_ingestion_bulk',
+     ...changeSet // Spread flat Old/New fields
+   };
+   changes.push(changelogEntry);
+   stats.changeDetected++;
  }
  }
 
@@ -280,7 +276,7 @@ async function bulkIndexMaps(documents) {
  if (documents.length === 0) return 0;
 
  const body = documents.flatMap(doc => [
- { index: { _index: 'maps', _id: doc.code } },
+ { index: { _index: 'maps', _id: doc.mnemonic } },
  doc
  ]);
 
@@ -491,33 +487,23 @@ async function runWorker() {
 
  // PHASE 3: Process maps in batches and accumulate results
  console.log('⚙️  Processing maps in batches from Epic API...\n');
- console.log(`⚡ Parallel processing: ${PARALLEL_BATCHES} batches at once (${PARALLEL_BATCHES * BATCH_SIZE} maps simultaneously)\n`);
+ console.log(`⚡ Rate limit: ${REQUESTS_PER_MINUTE} requests/min (${BATCH_SIZE} maps per request, ${BATCH_DELAY/1000}s delay)\n`);
  
  let allDocuments = [];
  let allChanges = [];
  let allNewCreators = [];
 
- // Process batches in parallel chunks
- for (let i = 0; i < allMapCodes.length; i += BATCH_SIZE * PARALLEL_BATCHES) {
+ // Process batches sequentially with rate limiting
+ for (let i = 0; i < allMapCodes.length; i += BATCH_SIZE) {
  if (!isRunning) break;
 
- // Create parallel batch promises
- const parallelBatches = [];
- for (let j = 0; j < PARALLEL_BATCHES && (i + j * BATCH_SIZE) < allMapCodes.length; j++) {
- const start = i + j * BATCH_SIZE;
- const chunk = allMapCodes.slice(start, start + BATCH_SIZE);
- parallelBatches.push(processBatch(chunk, existingDocs));
- }
-
- // Wait for all parallel batches to complete
- const results = await Promise.all(parallelBatches);
+ const chunk = allMapCodes.slice(i, i + BATCH_SIZE);
+ const result = await processBatch(chunk, existingDocs);
 
  // Aggregate results
- for (const result of results) {
  allDocuments.push(...result.documents);
  allChanges.push(...result.changes);
  allNewCreators.push(...result.newCreators);
- }
 
  // Log progress
  const elapsed = ((Date.now() - stats.startTime) / 1000 / 60).toFixed(1);
@@ -535,6 +521,11 @@ async function runWorker() {
  if (allChanges.length >= 200) {
  const toIndex = allChanges.splice(0, 200);
  await bulkIndexChanges(toIndex);
+ }
+
+ // Rate limiting delay
+ if (i + BATCH_SIZE < allMapCodes.length) {
+ await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
  }
  }
 
