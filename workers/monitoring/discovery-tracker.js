@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * Worker 4: Discovery Monitor
+ * Discovery Tracker Worker
  *
  * Monitors Fortnite Creative discovery surfaces
  * - Runs every 10 minutes
  * - Detects ADDED/REMOVED/MOVED events
  * - Auto-discovers new maps and creators
  * - Updates discovery-current and discovery-events indices
+ * - Conservative rate limiting: 100ms delay between API calls
  */
 
 const { Client } = require('@elastic/elasticsearch');
@@ -19,6 +20,7 @@ require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 const ES_HOST = process.env.ELASTICSEARCH_URL
 const INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+const API_DELAY_MS = 100; // Small delay between API calls for conservative rate limiting
 
 // Load surfaces and regions from environment
 const ALL_SURFACES = process.env.ALL_SURFACES ? 
@@ -190,6 +192,9 @@ async function runWorker() {
  const panels = await discoveryClient.fetchDiscoveryPanels(surfaceName);
  console.log(`Surface "${surfaceName}": ${panels.length} panels`);
 
+ // Add small delay between surfaces for conservative rate limiting
+ await new Promise(resolve => setTimeout(resolve, API_DELAY_MS));
+
  for (const panel of panels) {
  try {
  const pages = await discoveryClient.fetchPanelPages(
@@ -211,6 +216,9 @@ async function runWorker() {
  });
  }
  });
+
+ // Add small delay between panels for conservative rate limiting
+ await new Promise(resolve => setTimeout(resolve, API_DELAY_MS));
  } catch (error) {
  console.error(`❌ Error fetching panel ${panel.panelName}:`, error.message);
  }

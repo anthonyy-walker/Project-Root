@@ -18,7 +18,7 @@ Your repository has been **dramatically simplified** from 102 files down to just
 - **Refresh token lifetime**: 8 hours
 
 ### C. Discovery Client ✅
-- **Location**: `workers/monitoring/discovery-monitor.js`
+- **Location**: `workers/monitoring/discovery-tracker.js`
 - **Function**: 
   - Tracks discovery surfaces every 10 minutes
   - Detects ADDED/REMOVED/MOVED events
@@ -27,7 +27,7 @@ Your repository has been **dramatically simplified** from 102 files down to just
 - **Rate limit**: None
 
 ### D. CCU Monitor ✅
-- **Location**: `workers/monitoring/ccu-monitor.js`
+- **Location**: `workers/monitoring/player-counts.js`
 - **Function**:
   - Saves player counts every 10 minutes
   - Aligned timestamps (:00, :10, :20, etc.)
@@ -35,20 +35,20 @@ Your repository has been **dramatically simplified** from 102 files down to just
 - **Rate limit**: None (uses Creator Page API)
 
 ### E. Changelog Checkers ✅
-- **Maps**: `workers/ingestion/map-ingestion.js`
+- **Maps**: `workers/ingestion/maps-collector.js`
   - Saves to `map-changelog` index
   - Detects title, description, image, creator changes
-- **Creators**: `workers/ingestion/creator-ingestion.js`
+- **Creators**: `workers/ingestion/profiles-collector.js`
   - Saves to `creator-changelog` index
   - Detects name, bio, image, social link changes
 
 ### F. Follower Count Tracking ✅
-- **Location**: `workers/ingestion/creator-ingestion.js`
+- **Location**: `workers/ingestion/profiles-collector.js`
 - **Index**: `creator-follower-history`
 - **Function**: Saves follower count with timestamp for time-series analysis
 
 ### G. New File Checker ✅
-- **Location**: `workers/ingestion/creator-maps-discovery.js`
+- **Location**: `workers/ingestion/maps-discovery.js`
 - **Function**:
   - Scans all creators for their published maps
   - Auto-discovers new maps not yet in database
@@ -60,28 +60,28 @@ Your repository has been **dramatically simplified** from 102 files down to just
 
 ### 5 Essential Workers:
 
-1. **map-ingestion**
+1. **maps-collector**
    - Fetches map metadata using Links Service bulk API
    - Detects and logs changes to map-changelog
    - Auto-discovers new creators
    - Rate limit: 10 requests/minute, 100 maps per request
 
-2. **creator-ingestion**
+2. **profiles-collector**
    - Updates creator profiles (name, bio, images, socials)
    - Logs changes to creator-changelog
    - Tracks follower count history
    - Rate limit: 30 requests/minute
 
-3. **creator-maps-discovery**
+3. **maps-discovery**
    - Scans creators for new maps
    - Fast discovery (no rate limit)
    - Auto-creates map placeholders
 
-4. **ccu-monitor**
+4. **player-counts**
    - Records concurrent users every 10 minutes
    - Time-series data for analysis
 
-5. **discovery-monitor**
+5. **discovery-tracker**
    - Tracks featured map positions
    - Detects position changes and movements
    - Every 10 minutes
@@ -92,34 +92,34 @@ Your repository has been **dramatically simplified** from 102 files down to just
 
 | API | Endpoint | Rate Limit | Worker | Notes |
 |-----|----------|-----------|--------|-------|
-| **Links Service** | `/links/api/fn/mnemonic` | **10 requests/min** | map-ingestion | Bulk: 100 maps/request = 1000 maps/min |
-| **POPS API** | `/content/api/pages/.../v1/{id}` | **30 requests/min** | creator-ingestion | Creator profiles only |
-| **Creator Page API** | `/links/api/fn/creator/page/{id}` | **No limit** | creator-ingestion, creator-maps-discovery | Fast, includes CCU data |
-| **Discovery Surface** | `/discovery/surface/{name}` | **No limit** | discovery-monitor | Panel lists |
-| **Discovery Page** | `/discovery/surface/{name}/page` | **No limit** | discovery-monitor | Panel contents |
+| **Links Service** | `/links/api/fn/mnemonic` | **10 requests/min** | maps-collector | Bulk: 100 maps/request = 1000 maps/min |
+| **POPS API** | `/content/api/pages/.../v1/{id}` | **30 requests/min** | profiles-collector | Creator profiles only |
+| **Creator Page API** | `/links/api/fn/creator/page/{id}` | **No limit** | profiles-collector, maps-discovery | Fast, includes CCU data |
+| **Discovery Surface** | `/discovery/surface/{name}` | **No limit** | discovery-tracker | Panel lists |
+| **Discovery Page** | `/discovery/surface/{name}/page` | **No limit** | discovery-tracker | Panel contents |
 
 ### Detailed Rate Limit Info:
 
 **Links Service (10 req/min):**
 - Bulk endpoint: up to 100 maps per request
 - Effective throughput: 1,000 maps per minute
-- Used by: map-ingestion
+- Used by: maps-collector
 - Implementation: 6-second delay between requests
 
 **POPS API (30 req/min):**
 - Single creator per request
-- Used by: creator-ingestion
+- Used by: profiles-collector
 - Implementation: 24 creators in parallel, staggered by 2.5s each
 
 **Creator Page API (No limit):**
 - Returns creator's maps with CCU data
 - Supports pagination
-- Used by: creator-ingestion, creator-maps-discovery
+- Used by: profiles-collector, maps-discovery
 - Implementation: 100 parallel requests (no delay needed)
 
 **Discovery APIs (No limit):**
 - All surfaces and regions in parallel
-- Used by: discovery-monitor
+- Used by: discovery-tracker
 - Implementation: Full parallel processing
 
 See **RATE_LIMITS.md** for complete documentation with code examples.
@@ -158,12 +158,12 @@ Project-Root/
 │
 └── workers/
     ├── ingestion/               # Data collection workers
-    │   ├── map-ingestion.js
-    │   ├── creator-ingestion.js
-    │   └── creator-maps-discovery.js
+    │   ├── maps-collector.js
+    │   ├── profiles-collector.js
+    │   └── maps-discovery.js
     ├── monitoring/              # Monitoring workers
-    │   ├── ccu-monitor.js
-    │   └── discovery-monitor.js
+    │   ├── player-counts.js
+    │   └── discovery-tracker.js
     └── utils/                   # Shared utilities
         ├── auth-helper.js       # Token management for workers
         └── mapTransformer.js    # Data transformation
@@ -222,11 +222,11 @@ pm2 start ecosystem.config.js
 pm2 logs
 
 # Or manually
-node workers/ingestion/map-ingestion.js
-node workers/ingestion/creator-ingestion.js
-node workers/ingestion/creator-maps-discovery.js
-node workers/monitoring/ccu-monitor.js
-node workers/monitoring/discovery-monitor.js
+node workers/ingestion/maps-collector.js
+node workers/ingestion/profiles-collector.js
+node workers/ingestion/maps-discovery.js
+node workers/monitoring/player-counts.js
+node workers/monitoring/discovery-tracker.js
 ```
 
 ## 📚 Documentation

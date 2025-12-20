@@ -19,11 +19,11 @@ Complete guide for deploying the Fortnite Creative Data Collection System on AWS
 │  │  - Node.js 18+                                    │  │
 │  │  - PM2 Process Manager                            │  │
 │  │  - 5 Worker Processes:                            │  │
-│  │    • map-ingestion                                │  │
-│  │    • creator-ingestion                            │  │
-│  │    • creator-maps-discovery                       │  │
-│  │    • ccu-monitor                                  │  │
-│  │    • discovery-monitor                            │  │
+│  │    • maps-collector                                │  │
+│  │    • profiles-collector                            │  │
+│  │    • maps-discovery                       │  │
+│  │    • player-counts                                  │  │
+│  │    • discovery-tracker                            │  │
 │  └──────────────────────────────────────────────────┘  │
 └────────────┬────────────────────────────────────────────┘
              │
@@ -393,9 +393,9 @@ The `data/tokenData.json` file contains authentication tokens:
 If you need to scale beyond one instance:
 
 1. **Separate workers by type**:
-   - Instance 1: map-ingestion
-   - Instance 2: creator-ingestion + creator-maps-discovery
-   - Instance 3: ccu-monitor + discovery-monitor
+   - Instance 1: maps-collector
+   - Instance 2: profiles-collector + maps-discovery
+   - Instance 3: player-counts + discovery-tracker
 
 2. **Load balancer**: Not needed (workers are independent)
 
@@ -452,7 +452,7 @@ curl -XGET "https://your-opensearch-endpoint/_cluster/health?pretty"
 pm2 monit
 
 # Restart specific worker
-pm2 restart map-ingestion
+pm2 restart maps-collector
 ```
 
 ### Out of memory

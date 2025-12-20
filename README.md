@@ -12,34 +12,78 @@ This system continuously collects data from Epic Games APIs and stores it in Ela
 - **Discovery**: Featured map positions and movement tracking
 - **Changelogs**: Historical changes for maps and creators
 
-## Architecture
+## Quick Start Options
 
-### Workers (5 total)
+### Option 1: Docker (Recommended)
 
-1. **map-ingestion** - Fetches and updates map metadata
+The easiest way to get started:
+
+```bash
+# 1. Clone and configure
+git clone https://github.com/your-username/Project-Root.git
+cd Project-Root
+cp .env.example .env
+# Edit .env with your credentials
+
+# 2. Authenticate (one-time setup)
+npm install && cd EpicGames && npm install && cd ..
+node EpicGames/auth/authenticate.js <YOUR_EXCHANGE_CODE>
+
+# 3. Start everything
+docker-compose up -d
+
+# 4. View logs
+docker-compose logs -f workers
+```
+
+See **[DOCKER.md](DOCKER.md)** for complete Docker documentation.
+
+### Option 2: Manual Setup
+
+For development or custom deployments:
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Authenticate
+cd EpicGames
+node auth/authenticate.js <YOUR_EXCHANGE_CODE>
+cd ..
+
+# 3. Configure
+cp .env.example .env
+# Edit .env with your settings
+
+# 4. Start workers
+pm2 start ecosystem.config.js
+pm2 logs
+```
+
+See **[STARTUP_GUIDE.md](STARTUP_GUIDE.md)** for detailed manual setup.
    - Uses Links Service bulk API (100 maps/request)
    - Detects and logs changes to map-changelog
    - Auto-discovers new creators
    - Rate limit: 10 requests/minute
 
-2. **creator-ingestion** - Updates creator profiles
+2. **profiles-collector** - Updates creator profiles
    - Fetches display names, bios, follower counts, images, socials
    - Logs changes to creator-changelog
    - Tracks follower count history
    - Rate limit: 30 requests/minute
 
-3. **creator-maps-discovery** - Discovers new maps
+3. **maps-discovery** - Discovers new maps
    - Scans all creators for their published maps
    - Auto-discovers new maps not yet indexed
    - No rate limit
    - Fast full scan: ~15 minutes
 
-4. **ccu-monitor** - Monitors player counts
+4. **player-counts** - Monitors player counts
    - Saves concurrent user counts every 10 minutes
    - Stores time-series data in monthly indices
    - Aligned timestamps (:00, :10, :20, etc.)
 
-5. **discovery-monitor** - Tracks featured maps
+5. **discovery-tracker** - Tracks featured maps
    - Monitors discovery surfaces every 10 minutes
    - Detects ADDED/REMOVED/MOVED events
    - Saves current snapshot to discovery-current
@@ -109,11 +153,11 @@ pm2 logs
 Or manually:
 
 ```bash
-node workers/ingestion/map-ingestion.js
-node workers/ingestion/creator-ingestion.js
-node workers/ingestion/creator-maps-discovery.js
-node workers/monitoring/ccu-monitor.js
-node workers/monitoring/discovery-monitor.js
+node workers/ingestion/maps-collector.js
+node workers/ingestion/profiles-collector.js
+node workers/ingestion/maps-discovery.js
+node workers/monitoring/player-counts.js
+node workers/monitoring/discovery-tracker.js
 ```
 
 ## AWS Deployment
@@ -274,7 +318,7 @@ Indices are auto-created on first write. For production, you may want to:
 pm2 status
 
 # View logs
-pm2 logs map-ingestion
+pm2 logs maps-collector
 pm2 logs --lines 100
 
 # Monitor resources

@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 
 /**
- * Worker 1: Map Ingestion (Updated for Bulk Links Service)
+ * Maps Collector Worker
  *
  * Continuously fetches and updates map data from Epic Links Service
  * - Uses bulk API (100 maps per request)
- * - Saves in fn360-compatible format
+ * - Saves in Elasticsearch-compatible format
  * - Detects changes and logs to map-changelog
  * - Auto-discovers new creators
  * - Preserves performance metrics
+ * - Rate limit: 10 requests/minute
  */
 
 const { Client } = require('@elastic/elasticsearch');

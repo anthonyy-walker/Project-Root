@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 
 /**
- * Worker 2B: Creator Maps Discovery (Fast - No Rate Limit)
+ * Maps Discovery Worker
  *
  * Continuously scans creators to:
  * - Update maps_created count
  * - Discover new maps not in maps index
- * - Create placeholder entries for Worker 1 to enrich
+ * - Create placeholder entries for Maps Collector to enrich
  *
- * Rate: NO LIMIT (Creator Page API has no rate limiting)
- * Speed: ~15 minutes for 162K creators
+ * Rate: 50 creators per batch with 2-second delays (completes within 10 minutes)
+ * Speed: ~10 minutes for typical creator count
  */
 
 const { Client } = require('@elastic/elasticsearch');
@@ -20,7 +20,8 @@ require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 const ES_URL = process.env.ELASTICSEARCH_URL
 const SCROLL_SIZE = 1000;
-const BATCH_SIZE = 100; // Process in batches for bulk operations
+const BATCH_SIZE = 50; // Process 50 creators in parallel (rate limited for 10-minute completion)
+const BATCH_DELAY = 2000; // 2-second delay between batches to ensure completion within 10 minutes
 const ERROR_RETRY_DELAY = 5000;
 
 const es = new Client({ node: ES_URL });
@@ -230,7 +231,7 @@ async function runWorker() {
  let allCreators = searchResponse.hits.hits;
 
  while (allCreators.length > 0) {
- // Process batch in parallel (no rate limit!)
+ // Process batch in parallel with rate limiting
  const batches = [];
  for (let i = 0; i < allCreators.length; i += BATCH_SIZE) {
  batches.push(allCreators.slice(i, i + BATCH_SIZE));
@@ -239,6 +240,11 @@ async function runWorker() {
  for (const batch of batches) {
  await processBatch(batch);
  stats.processed += batch.length;
+
+ // Add delay between batches to ensure completion within 10 minutes
+ if (batch.length === BATCH_SIZE) {
+ await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
+ }
 
  // Log progress every 1000 creators
  if (stats.processed % 1000 === 0) {

@@ -6,11 +6,11 @@ This document details the rate limits for all Epic Games APIs used in this proje
 
 | API | Endpoint | Rate Limit | Used By | Notes |
 |-----|----------|-----------|---------|-------|
-| Links Service | `/links/api/fn/mnemonic` | **10 requests/minute** | map-ingestion.js | Bulk endpoint: 100 maps per request |
-| POPS API | `/content/api/pages/fortnite-game/creative/v1/{creatorId}` | **30 requests/minute** | creator-ingestion.js | Creator profiles only |
-| Creator Page API | `/links/api/fn/creator/page/{creatorId}` | **No limit** | creator-ingestion.js, creator-maps-discovery.js | Fast, no throttling needed |
-| Discovery Surface | `/discovery/surface/{surfaceName}` | **No limit** | discovery-monitor.js | Multiple parallel requests work fine |
-| Discovery Page | `/discovery/surface/{surfaceName}/page` | **No limit** | discovery-monitor.js | Multiple parallel requests work fine |
+| Links Service | `/links/api/fn/mnemonic` | **10 requests/minute** | maps-collector.js | Bulk endpoint: 100 maps per request |
+| POPS API | `/content/api/pages/fortnite-game/creative/v1/{creatorId}` | **30 requests/minute** | profiles-collector.js | Creator profiles only |
+| Creator Page API | `/links/api/fn/creator/page/{creatorId}` | **No limit** | profiles-collector.js, maps-discovery.js | Fast, no throttling needed |
+| Discovery Surface | `/discovery/surface/{surfaceName}` | **No limit** | discovery-tracker.js | Multiple parallel requests work fine |
+| Discovery Page | `/discovery/surface/{surfaceName}/page` | **No limit** | discovery-tracker.js | Multiple parallel requests work fine |
 
 ## Detailed Information
 
@@ -22,7 +22,7 @@ This document details the rate limits for all Epic Games APIs used in this proje
 
 **Implementation**:
 ```javascript
-// File: workers/ingestion/map-ingestion.js
+// File: workers/ingestion/maps-collector.js
 const REQUESTS_PER_MINUTE = 10;
 const BATCH_DELAY = (60 / REQUESTS_PER_MINUTE) * 1000; // 6 seconds
 ```
@@ -70,7 +70,7 @@ const response = await axios.post(
 
 **Implementation**:
 ```javascript
-// File: workers/ingestion/creator-ingestion.js
+// File: workers/ingestion/profiles-collector.js
 const BATCH_SIZE = 24; // Process 24 creators in parallel
 const BATCH_DELAY = 60000; // 60 seconds between batches
 // Stagger requests by 2.5 seconds each within batch
@@ -126,7 +126,7 @@ const response = await axios.get(
 
 **Implementation**:
 ```javascript
-// File: workers/ingestion/creator-maps-discovery.js
+// File: workers/ingestion/maps-discovery.js
 const BATCH_SIZE = 100; // Process 100 creators in parallel
 // No delay needed - no rate limiting
 ```
@@ -192,7 +192,7 @@ const nextPage = await getCreatorMaps(
 
 **Implementation**:
 ```javascript
-// File: workers/monitoring/discovery-monitor.js
+// File: workers/monitoring/discovery-tracker.js
 // Multiple surfaces fetched in parallel
 // No rate limiting needed
 ```
@@ -227,7 +227,7 @@ const response = await axios.post(
 
 **Implementation**:
 ```javascript
-// File: workers/monitoring/discovery-monitor.js
+// File: workers/monitoring/discovery-tracker.js
 // All regions processed in parallel
 // Multiple panels fetched simultaneously
 // No rate limiting needed

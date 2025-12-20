@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Worker 3: CCU Monitor (Player Count Snapshot)
+ * Player Counts Worker
  *
  * Monitors concurrent users for all maps
  * - Runs every 10 minutes at :00, :10, :20, :30, :40, :50

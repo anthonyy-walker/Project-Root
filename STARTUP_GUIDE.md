@@ -86,30 +86,30 @@ Start each worker in separate terminal windows:
 
 ```bash
 # Terminal 1: Map ingestion
-node workers/ingestion/map-ingestion.js
+node workers/ingestion/maps-collector.js
 
 # Terminal 2: Creator ingestion
-node workers/ingestion/creator-ingestion.js
+node workers/ingestion/profiles-collector.js
 
 # Terminal 3: Creator maps discovery
-node workers/ingestion/creator-maps-discovery.js
+node workers/ingestion/maps-discovery.js
 
 # Terminal 4: CCU monitor
-node workers/monitoring/ccu-monitor.js
+node workers/monitoring/player-counts.js
 
 # Terminal 5: Discovery monitor
-node workers/monitoring/discovery-monitor.js
+node workers/monitoring/discovery-tracker.js
 ```
 
 ## Workers Overview
 
 | Worker | Description | Frequency |
 |--------|-------------|-----------|
-| **map-ingestion** | Fetches map metadata and tracks changes | Continuous |
-| **creator-ingestion** | Updates creator profiles and follower counts | Continuous |
-| **creator-maps-discovery** | Discovers new maps from creators | Every hour |
-| **ccu-monitor** | Records player counts | Every 10 min |
-| **discovery-monitor** | Tracks featured map positions | Every 10 min |
+| **maps-collector** | Fetches map metadata and tracks changes | Continuous |
+| **profiles-collector** | Updates creator profiles and follower counts | Continuous |
+| **maps-discovery** | Discovers new maps from creators | Every hour |
+| **player-counts** | Records player counts | Every 10 min |
+| **discovery-tracker** | Tracks featured map positions | Every 10 min |
 
 ## Token Management
 
@@ -147,15 +147,15 @@ pm2 status
 
 # View logs
 pm2 logs                    # All workers
-pm2 logs map-ingestion      # Specific worker
+pm2 logs maps-collector      # Specific worker
 
 # Restart workers
 pm2 restart all             # All workers
-pm2 restart map-ingestion   # Specific worker
+pm2 restart maps-collector   # Specific worker
 
 # Stop workers
 pm2 stop all                # All workers
-pm2 stop map-ingestion      # Specific worker
+pm2 stop maps-collector      # Specific worker
 
 # Delete workers (stops and removes from PM2)
 pm2 delete all
@@ -187,11 +187,11 @@ curl http://localhost:9200/creators/_count
 pm2 status
 
 # Should show all 5 workers running:
-# - map-ingestion
-# - creator-ingestion
-# - creator-maps-discovery
-# - ccu-monitor
-# - discovery-monitor
+# - maps-collector
+# - profiles-collector
+# - maps-discovery
+# - player-counts
+# - discovery-tracker
 ```
 
 ## Troubleshooting
@@ -233,7 +233,7 @@ Tokens auto-refresh every 4 hours. If auto-refresh fails:
 ### High memory usage
 
 Workers are configured with memory limits:
-- map-ingestion: 1GB max
+- maps-collector: 1GB max
 - Others: 512MB max
 
 View memory usage:

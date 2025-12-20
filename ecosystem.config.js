@@ -6,8 +6,8 @@
 module.exports = {
   apps: [
     {
-      name: 'map-ingestion',
-      script: './workers/ingestion/map-ingestion.js',
+      name: 'maps-collector',
+      script: './workers/ingestion/maps-collector.js',
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
@@ -16,13 +16,13 @@ module.exports = {
       env: {
         NODE_ENV: 'production'
       },
-      error_file: './logs/map-ingestion-error.log',
-      out_file: './logs/map-ingestion-out.log',
+      error_file: './logs/maps-collector-error.log',
+      out_file: './logs/maps-collector-out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
     },
     {
-      name: 'creator-ingestion',
-      script: './workers/ingestion/creator-ingestion.js',
+      name: 'profiles-collector',
+      script: './workers/ingestion/profiles-collector.js',
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
@@ -31,13 +31,13 @@ module.exports = {
       env: {
         NODE_ENV: 'production'
       },
-      error_file: './logs/creator-ingestion-error.log',
-      out_file: './logs/creator-ingestion-out.log',
+      error_file: './logs/profiles-collector-error.log',
+      out_file: './logs/profiles-collector-out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
     },
     {
-      name: 'creator-maps-discovery',
-      script: './workers/ingestion/creator-maps-discovery.js',
+      name: 'maps-discovery',
+      script: './workers/ingestion/maps-discovery.js',
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
@@ -46,13 +46,13 @@ module.exports = {
       env: {
         NODE_ENV: 'production'
       },
-      error_file: './logs/creator-maps-discovery-error.log',
-      out_file: './logs/creator-maps-discovery-out.log',
+      error_file: './logs/maps-discovery-error.log',
+      out_file: './logs/maps-discovery-out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
     },
     {
-      name: 'ccu-monitor',
-      script: './workers/monitoring/ccu-monitor.js',
+      name: 'player-counts',
+      script: './workers/monitoring/player-counts.js',
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
@@ -61,13 +61,13 @@ module.exports = {
       env: {
         NODE_ENV: 'production'
       },
-      error_file: './logs/ccu-monitor-error.log',
-      out_file: './logs/ccu-monitor-out.log',
+      error_file: './logs/player-counts-error.log',
+      out_file: './logs/player-counts-out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
     },
     {
-      name: 'discovery-monitor',
-      script: './workers/monitoring/discovery-monitor.js',
+      name: 'discovery-tracker',
+      script: './workers/monitoring/discovery-tracker.js',
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
@@ -76,8 +76,8 @@ module.exports = {
       env: {
         NODE_ENV: 'production'
       },
-      error_file: './logs/discovery-monitor-error.log',
-      out_file: './logs/discovery-monitor-out.log',
+      error_file: './logs/discovery-tracker-error.log',
+      out_file: './logs/discovery-tracker-out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
     }
   ]

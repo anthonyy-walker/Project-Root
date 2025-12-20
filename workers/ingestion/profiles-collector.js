@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * Worker 2A: Creator Profile Ingestion (POPS Only)
+ * Profiles Collector Worker
  *
  * Continuously fetches and updates creator profile data from POPS API
  * - Rate limited: 30 requests per minute (2-second delay)
  * - Updates: display_name, bio, follower_count, images, socials
  * - Logs follower changes to creator-follower-history
  * - Logs other changes to creator-changelog
- * - Does NOT track maps (see Worker 2B for that)
+ * - Does NOT track maps (see Maps Discovery worker for that)
  */
 
 const { Client } = require('@elastic/elasticsearch');
