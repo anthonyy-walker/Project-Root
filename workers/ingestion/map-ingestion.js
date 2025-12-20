@@ -13,7 +13,6 @@
 
 const { Client } = require('@elastic/elasticsearch');
 const { getBulkMnemonicInfo } = require('../../EpicGames/apis/linksServiceAPI');
-const { transformBulkMapData } = require('../../database/transformers/mapTransformer');
 const { initAuth, getValidToken } = require('../../EpicGames/auth/auth');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
@@ -230,7 +229,7 @@ async function processBatch(mapIds, existingDocs) {
  };
 
  // Transform single map
- const { transformMapData } = require('../../database/transformers/mapTransformer');
+ const { transformMapData } = require('../utils/mapTransformer');
  const newDoc = transformMapData(data, options);
  documents.push(newDoc);
 
