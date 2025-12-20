@@ -1,8 +1,13 @@
+/**
+ * PM2 Ecosystem Configuration - Essential Workers Only
+ * 
+ * Simplified worker setup for Fortnite Creative data collection
+ */
 module.exports = {
   apps: [
     {
-      name: 'worker-1-maps',
-      script: './workers/ingestion/map-ingestion.js',
+      name: 'maps-collector',
+      script: './workers/ingestion/maps-collector.js',
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
@@ -11,13 +16,13 @@ module.exports = {
       env: {
         NODE_ENV: 'production'
       },
-      error_file: './logs/worker-1-maps-error.log',
-      out_file: './logs/worker-1-maps-out.log',
+      error_file: './logs/maps-collector-error.log',
+      out_file: './logs/maps-collector-out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
     },
     {
-      name: 'worker-2a-creator-profiles',
-      script: './workers/ingestion/creator-ingestion.js',
+      name: 'profiles-collector',
+      script: './workers/ingestion/profiles-collector.js',
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
@@ -26,13 +31,13 @@ module.exports = {
       env: {
         NODE_ENV: 'production'
       },
-      error_file: './logs/worker-2a-profiles-error.log',
-      out_file: './logs/worker-2a-profiles-out.log',
+      error_file: './logs/profiles-collector-error.log',
+      out_file: './logs/profiles-collector-out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
     },
     {
-      name: 'worker-2b-creator-maps',
-      script: './workers/ingestion/creator-maps-discovery.js',
+      name: 'maps-discovery',
+      script: './workers/ingestion/maps-discovery.js',
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
@@ -41,13 +46,13 @@ module.exports = {
       env: {
         NODE_ENV: 'production'
       },
-      error_file: './logs/worker-2b-maps-error.log',
-      out_file: './logs/worker-2b-maps-out.log',
+      error_file: './logs/maps-discovery-error.log',
+      out_file: './logs/maps-discovery-out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
     },
     {
-      name: 'worker-3-ccu-monitor',
-      script: './workers/monitoring/ccu-monitor.js',
+      name: 'player-counts',
+      script: './workers/monitoring/player-counts.js',
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
@@ -56,13 +61,13 @@ module.exports = {
       env: {
         NODE_ENV: 'production'
       },
-      error_file: './logs/worker-3-ccu-error.log',
-      out_file: './logs/worker-3-ccu-out.log',
+      error_file: './logs/player-counts-error.log',
+      out_file: './logs/player-counts-out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
     },
     {
-      name: 'worker-4-discovery-monitor',
-      script: './workers/monitoring/discovery-monitor.js',
+      name: 'discovery-tracker',
+      script: './workers/monitoring/discovery-tracker.js',
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
@@ -71,83 +76,8 @@ module.exports = {
       env: {
         NODE_ENV: 'production'
       },
-      error_file: './logs/worker-4-discovery-error.log',
-      out_file: './logs/worker-4-discovery-out.log',
-      log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
-    },
-    {
-      name: 'worker-5a-ecosystem-hot',
-      script: './workers/aggregation/ecosystem-hot-maps.js',
-      instances: 1,
-      exec_mode: 'fork',
-      autorestart: true,
-      watch: false,
-      max_memory_restart: '512M',
-      env: {
-        NODE_ENV: 'production'
-      },
-      error_file: './logs/worker-5a-hot-error.log',
-      out_file: './logs/worker-5a-hot-out.log',
-      log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
-    },
-    {
-      name: 'worker-5b-ecosystem-warm',
-      script: './workers/aggregation/ecosystem-warm-maps.js',
-      instances: 1,
-      exec_mode: 'fork',
-      autorestart: true,
-      watch: false,
-      max_memory_restart: '512M',
-      env: {
-        NODE_ENV: 'production'
-      },
-      error_file: './logs/worker-5b-warm-error.log',
-      out_file: './logs/worker-5b-warm-out.log',
-      log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
-    },
-    {
-      name: 'worker-5c-ecosystem-cold',
-      script: './workers/aggregation/ecosystem-cold-maps.js',
-      instances: 1,
-      exec_mode: 'fork',
-      autorestart: true,
-      watch: false,
-      max_memory_restart: '512M',
-      env: {
-        NODE_ENV: 'production'
-      },
-      error_file: './logs/worker-5c-cold-error.log',
-      out_file: './logs/worker-5c-cold-out.log',
-      log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
-    },
-    {
-      name: 'worker-6-data-compactor',
-      script: './workers/aggregation/data-compactor.js',
-      instances: 1,
-      exec_mode: 'fork',
-      autorestart: true,
-      watch: false,
-      max_memory_restart: '512M',
-      env: {
-        NODE_ENV: 'production'
-      },
-      error_file: './logs/worker-6-compactor-error.log',
-      out_file: './logs/worker-6-compactor-out.log',
-      log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
-    },
-    {
-      name: 'worker-7-performance',
-      script: './workers/aggregation/performance-calculator.js',
-      instances: 1,
-      exec_mode: 'fork',
-      autorestart: true,
-      watch: false,
-      max_memory_restart: '1G',
-      env: {
-        NODE_ENV: 'production'
-      },
-      error_file: './logs/worker-7-performance-error.log',
-      out_file: './logs/worker-7-performance-out.log',
+      error_file: './logs/discovery-tracker-error.log',
+      out_file: './logs/discovery-tracker-out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
     }
   ]

@@ -1,189 +1,267 @@
-# Project Root - Setup & Startup Guide
+# Quick Start Guide
 
-## Authentication Status
+## Prerequisites
 
-✅ **Currently Authenticated**
-- Account: Project Harvest
-- Token expires: 2025-11-24 04:05:24 UTC (auto-refreshes)
-- Location: `/root/Project-Root/data/tokenData.json`
+Before starting:
+- ✅ Node.js 16+ installed
+- ✅ Elasticsearch 8.x running on port 9200
+- ✅ Epic Games account
+
+## 1. Install Dependencies
+
+```bash
+npm install
+```
+
+## 2. Authenticate with Epic Games
+
+**Step 1**: Get an exchange code
+
+Visit this URL in your browser:
+```
+https://www.epicgames.com/id/api/redirect?clientId=ec684b8c687f479fadea3cb2ad83f5c6&responseType=code
+```
+
+**Step 2**: Login and copy the code
+
+After logging in, you'll be redirected to a URL like:
+```
+https://www.epicgames.com/id/api/redirect?code=YOUR_EXCHANGE_CODE_HERE
+```
+
+Copy the `code` parameter value.
+
+**Step 3**: Authenticate
+
+```bash
+cd EpicGames
+node auth/authenticate.js YOUR_EXCHANGE_CODE_HERE
+```
+
+You should see:
+```
+✅ Authentication complete!
+📝 Token saved to: data/tokenData.json
+🔄 Automatic token refresh is now active
+```
+
+## 3. Configure Environment
+
+Create a `.env` file in the project root:
+
+```bash
+# Elasticsearch
+ELASTICSEARCH_URL=http://localhost:9200
+
+# Epic Games Configuration
+FORTNITE_BRANCH=++Fortnite+Release-32.10-CL-35815136-Windows
+EPIC_X_ACCESS_TOKEN=your_token_here
+
+# Discovery Configuration (optional - defaults provided)
+ALL_SURFACES=CreativeDiscoverySurface_Frontend,CreativeDiscoverySurface_Browse
+MATCHMAKING_REGIONS=NAE,NAW,EU,OCE,BR,ASIA
+```
+
+## 4. Start Workers
+
+### Using PM2 (Recommended)
+
+```bash
+# Install PM2 globally (if not already installed)
+npm install -g pm2
+
+# Start all workers
+pm2 start ecosystem.config.js
+
+# View status
+pm2 status
+
+# View logs
+pm2 logs
+```
+
+### Manual Start (Development)
+
+Start each worker in separate terminal windows:
+
+```bash
+# Terminal 1: Map ingestion
+node workers/ingestion/maps-collector.js
+
+# Terminal 2: Creator ingestion
+node workers/ingestion/profiles-collector.js
+
+# Terminal 3: Creator maps discovery
+node workers/ingestion/maps-discovery.js
+
+# Terminal 4: CCU monitor
+node workers/monitoring/player-counts.js
+
+# Terminal 5: Discovery monitor
+node workers/monitoring/discovery-tracker.js
+```
+
+## Workers Overview
+
+| Worker | Description | Frequency |
+|--------|-------------|-----------|
+| **maps-collector** | Fetches map metadata and tracks changes | Continuous |
+| **profiles-collector** | Updates creator profiles and follower counts | Continuous |
+| **maps-discovery** | Discovers new maps from creators | Every hour |
+| **player-counts** | Records player counts | Every 10 min |
+| **discovery-tracker** | Tracks featured map positions | Every 10 min |
 
 ## Token Management
 
 ### Check Token Status
+
 ```bash
-cd /root/Project-Root/EpicGames
+cd EpicGames
 node -e "const auth = require('./auth/auth'); const t = auth.loadTokens(); console.log('Account:', t.displayName); console.log('Expires:', t.expires_at);"
 ```
 
 ### Re-authenticate (if needed)
+
+If your token expires or you need to re-authenticate:
+
 ```bash
-cd /root/Project-Root/EpicGames
-# 1. Get exchange code from: https://www.epicgames.com/id/api/redirect?clientId=ec684b8c687f479fadea3cb2ad83f5c6&responseType=code
-# 2. Run:
-node auth/authenticate.js <YOUR_EXCHANGE_CODE>
+cd EpicGames
+# Get new exchange code from URL above, then:
+node auth/authenticate.js YOUR_NEW_EXCHANGE_CODE
 ```
 
 ### Manual Token Refresh
+
+Tokens auto-refresh, but you can manually refresh if needed:
+
 ```bash
-cd /root/Project-Root/EpicGames
+cd EpicGames
 node -e "require('./auth/auth').refreshAccessToken().then(() => console.log('✅ Refreshed')).catch(e => console.error('❌', e.message));"
 ```
 
-## Starting the Workers
+## PM2 Commands
 
-### Start All Workers with PM2
 ```bash
-cd /root/Project-Root
-pm2 start ecosystem.config.js
-```
-
-### Monitor Workers
-```bash
-# View status
+# View status of all workers
 pm2 status
 
-# View logs (all workers)
-pm2 logs
+# View logs
+pm2 logs                    # All workers
+pm2 logs maps-collector      # Specific worker
 
-# View specific worker
-pm2 logs map-ingestion
+# Restart workers
+pm2 restart all             # All workers
+pm2 restart maps-collector   # Specific worker
+
+# Stop workers
+pm2 stop all                # All workers
+pm2 stop maps-collector      # Specific worker
+
+# Delete workers (stops and removes from PM2)
+pm2 delete all
 
 # Real-time monitoring
 pm2 monit
 ```
 
-### Individual Worker Control
+## Verify Everything is Working
+
+### Check Elasticsearch
+
 ```bash
-# Restart
-pm2 restart map-ingestion
-pm2 restart creator-ingestion
-pm2 restart ccu-monitor
-pm2 restart discovery-monitor
-pm2 restart daily-aggregator
+# Cluster health
+curl http://localhost:9200/_cluster/health?pretty
 
-# Stop
-pm2 stop map-ingestion
+# List indices
+curl http://localhost:9200/_cat/indices?v
 
-# Delete
-pm2 delete map-ingestion
-```
-
-### Stop All Workers
-```bash
-pm2 stop all
-pm2 delete all
-```
-
-## System Services
-
-### Elasticsearch
-```bash
-sudo systemctl status elasticsearch
-sudo systemctl restart elasticsearch
-curl http://localhost:9200
-```
-
-### Kibana
-```bash
-# Check process
-ps aux | grep kibana | grep -v grep
-
-# Access
-http://YOUR_SERVER_IP:5601
-
-# Restart
-pkill -f kibana
-/opt/kibana/bin/kibana --allow-root > /root/Project-Root/logs/kibana.log 2>&1 &
-```
-
-## Worker Details
-
-1. **map-ingestion** - Continuous map data ingestion
-   - Processes all 266K maps in cycles
-   - Auto-discovers new creators
-   - No rate limit
-
-2. **creator-ingestion** - Creator data ingestion (rate-limited)
-   - 30 requests/minute (2-second delays)
-   - Fetches POPS + creator page data
-   - Tracks follower growth
-
-3. **ccu-monitor** - Every 10 minutes
-   - Monitors top 1000 maps
-   - Auto-discovers new maps from playercount
-   - Skips invalid (-1) values
-
-4. **discovery-monitor** - Every 10 minutes
-   - Scans all discovery surfaces
-   - Detects ADDED/REMOVED/MOVED events
-   - Auto-discovers new maps/creators
-
-5. **daily-aggregator** - Cron at 00:00 UTC
-   - Calculates 24h/7d/30d averages
-   - Updates performance metrics
-   - Creates daily snapshots
-
-## Data Access
-
-### Kibana
-- URL: http://YOUR_SERVER_IP:5601
-- No authentication required (dev mode)
-- Use Dev Tools, Discover, and dashboards
-
-### Elasticsearch Queries
-```bash
 # Count documents
 curl http://localhost:9200/maps/_count
 curl http://localhost:9200/creators/_count
+```
 
-# Search maps
-curl -X GET "http://localhost:9200/maps/_search?size=10&pretty"
+### Check Workers
 
-# Check indices
-curl http://localhost:9200/_cat/indices?v
+```bash
+# PM2 status
+pm2 status
+
+# Should show all 5 workers running:
+# - maps-collector
+# - profiles-collector
+# - maps-discovery
+# - player-counts
+# - discovery-tracker
 ```
 
 ## Troubleshooting
 
 ### Workers won't start
-- Check authentication: Token must be valid
-- Check Elasticsearch: Must be running on port 9200
-- Check logs: `pm2 logs <worker-name>`
 
-### Out of Memory
-- Elasticsearch heap: 1GB (configured in `/etc/elasticsearch/jvm.options.d/heap.options`)
-- Monitor: `free -h`
-- Restart ES if needed: `sudo systemctl restart elasticsearch`
-
-### Token expired
-- Auto-refresh should handle this
-- If fails, re-authenticate with new exchange code
-
-## Quick Start Commands
-
+**Authentication issues**:
 ```bash
-# Start everything
-cd /root/Project-Root
-pm2 start ecosystem.config.js
-pm2 logs
+# Check if token exists
+ls -la data/tokenData.json
 
-# Check status in another terminal
-curl http://localhost:9200/_cat/indices?v
-curl http://localhost:5601/api/status
-
-# Access Kibana
-# http://YOUR_SERVER_IP:5601
+# Check token validity
+cd EpicGames
+node -e "const auth = require('./auth/auth'); console.log(auth.isTokenValid())"
 ```
 
-## Current State
+**Elasticsearch connection**:
+```bash
+# Check if Elasticsearch is running
+curl http://localhost:9200
 
-✅ Elasticsearch running (1GB heap)
-✅ Kibana available on port 5601
-✅ 266,865 maps indexed
-✅ 160,726 creators indexed
-✅ 10 indices created
-✅ Authentication configured (expires 2025-11-24 04:05:24 UTC)
-✅ All 5 workers ready with auth
-✅ PM2 ecosystem configured
+# Check Elasticsearch status
+curl http://localhost:9200/_cluster/health?pretty
+```
 
-**System is ready to start!**
+**Check logs**:
+```bash
+pm2 logs <worker-name>
+```
+
+### Token expired
+
+Tokens auto-refresh every 4 hours. If auto-refresh fails:
+
+1. Check refresh token is valid (valid for 8 hours)
+2. Re-authenticate with new exchange code
+3. Restart workers: `pm2 restart all`
+
+### High memory usage
+
+Workers are configured with memory limits:
+- maps-collector: 1GB max
+- Others: 512MB max
+
+View memory usage:
+```bash
+pm2 monit
+```
+
+If hitting limits:
+- Adjust `max_memory_restart` in ecosystem.config.js
+- Increase server RAM
+- Use AWS EC2 larger instance
+
+### Rate limiting errors
+
+Check RATE_LIMITS.md for details. Workers respect rate limits by default:
+- Links Service: 10 requests/minute
+- POPS API: 30 requests/minute
+- Others: No limits
+
+## Next Steps
+
+1. ✅ Workers are running
+2. 📊 Access Elasticsearch data directly or through a UI like Kibana
+3. 📈 Monitor worker logs: `pm2 logs`
+4. 🚀 For production deployment, see README.md AWS section
+
+## Support
+
+- Check logs: `pm2 logs <worker-name>`
+- Review RATE_LIMITS.md for API details
+- Verify Elasticsearch health: `curl http://localhost:9200/_cluster/health?pretty`

@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  # Fortnite data collection workers
+  workers:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fortnite-workers
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - ELASTICSEARCH_URL=${ELASTICSEARCH_URL}
+      - EPIC_ACCESS_TOKEN=${EPIC_ACCESS_TOKEN}
+      - EPIC_ACCOUNT_ID=${EPIC_ACCOUNT_ID}
+      - EPIC_X_ACCESS_TOKEN=${EPIC_X_ACCESS_TOKEN}
+      - FORTNITE_BRANCH=${FORTNITE_BRANCH}
+    volumes:
+      # Persist token data
+      - ./data:/app/data
+      # Persist logs
+      - ./logs:/app/logs
+    networks:
+      - fortnite-net
+    depends_on:
+      - elasticsearch
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Elasticsearch for data storage
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: fortnite-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - xpack.security.enabled=false
+      - xpack.security.http.ssl.enabled=false
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      - fortnite-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Kibana for data visualization (optional)
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: fortnite-kibana
+    restart: unless-stopped
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=kibana
+    ports:
+      - "5601:5601"
+    networks:
+      - fortnite-net
+    depends_on:
+      - elasticsearch
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  fortnite-net:
+    driver: bridge
+
+volumes:
+  elasticsearch-data:
+    driver: local

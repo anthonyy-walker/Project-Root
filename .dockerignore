@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Environment
+.env.local
+.env.*.local
+
+# Token data (will be volume mounted)
+data/tokenData.json
+
+# Logs (will be volume mounted)
+logs/
+*.log
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation (not needed in container)
+*.md
+SUMMARY.md
+STARTUP_GUIDE.md
+AWS_DEPLOYMENT.md
+
+# Test data
+test-data/
+seed-data/
+
+# OS
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
