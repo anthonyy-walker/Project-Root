@@ -17,13 +17,28 @@ const { initializeAuth, getAccessToken, getAccountId } = require('../utils/auth-
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
-const ES_URL = process.env.ELASTICSEARCH_URL;
+const OPENSEARCH_HOST = process.env.OPENSEARCH_HOST;
+const OPENSEARCH_USERNAME = process.env.OPENSEARCH_USERNAME;
+const OPENSEARCH_PASSWORD = process.env.OPENSEARCH_PASSWORD;
 const SCROLL_SIZE = 1000;
 const BATCH_SIZE = 24; // Process 24 creators in parallel (safer rate)
 const BATCH_DELAY = 60000; // Wait 1 minute (60 seconds) between batches
 const ERROR_RETRY_DELAY = 5000;
 
-const es = new Client({ node: ES_URL });
+const clientConfig = {
+  node: OPENSEARCH_HOST,
+  requestTimeout: 30000,
+  ssl: { rejectUnauthorized: false }
+};
+
+if (OPENSEARCH_USERNAME && OPENSEARCH_PASSWORD) {
+  clientConfig.auth = {
+    username: OPENSEARCH_USERNAME,
+    password: OPENSEARCH_PASSWORD
+  };
+}
+
+const es = new Client(clientConfig);
 
 // Track statistics
 const stats = {

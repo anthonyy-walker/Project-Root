@@ -18,7 +18,9 @@ const { initAuth, getValidToken } = require('../../EpicGames/auth/auth');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
-const ES_HOST = process.env.ELASTICSEARCH_URL
+const OPENSEARCH_HOST = process.env.OPENSEARCH_HOST;
+const OPENSEARCH_USERNAME = process.env.OPENSEARCH_USERNAME;
+const OPENSEARCH_PASSWORD = process.env.OPENSEARCH_PASSWORD;
 const BATCH_SIZE = 100; // Links Service supports 100 per request
 const SCROLL_SIZE = 10000; // ES scroll size - increased for faster fetching
 const ES_BULK_SIZE = 1000; // Elasticsearch bulk operation size - increased
@@ -27,8 +29,21 @@ const BATCH_DELAY = (60 / REQUESTS_PER_MINUTE) * 1000; // Delay between requests
 const PARALLEL_BATCHES = 1; // Sequential processing to respect rate limit
 const ERROR_RETRY_DELAY = 5000; // 5 seconds
 
-// Initialize Elasticsearch client
-const es = new Client({ node: ES_HOST });
+const clientConfig = {
+  node: OPENSEARCH_HOST,
+  requestTimeout: 30000,
+  ssl: { rejectUnauthorized: false }
+};
+
+if (OPENSEARCH_USERNAME && OPENSEARCH_PASSWORD) {
+  clientConfig.auth = {
+    username: OPENSEARCH_USERNAME,
+    password: OPENSEARCH_PASSWORD
+  };
+}
+
+// Initialize OpenSearch client
+const es = new Client(clientConfig);
 
 // Worker state
 let isRunning = false;
