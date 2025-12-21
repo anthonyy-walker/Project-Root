@@ -1,10 +1,25 @@
 /**
- * PM2 Ecosystem Configuration - Essential Workers Only
+ * PM2 Ecosystem Configuration - Fortnite Data Collection
  * 
- * Simplified worker setup for Fortnite Creative data collection
+ * Optimized worker setup for production deployment
  */
 module.exports = {
   apps: [
+    {
+      name: 'data-loader',
+      script: './test-opensearch-load.js',
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: false,
+      watch: false,
+      max_memory_restart: '1G',
+      env: {
+        NODE_ENV: 'production'
+      },
+      error_file: './logs/data-loader-error.log',
+      out_file: './logs/data-loader-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
+    },
     {
       name: 'maps-collector',
       script: './workers/ingestion/maps-collector.js',
