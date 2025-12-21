@@ -1,0 +1,23 @@
+{
+  "access_token": "65c8dfbce5d54e31aeb4deda549f8a4e",
+  "expires_in": 7200,
+  "expires_at": "2025-12-22T00:34:29.729Z",
+  "token_type": "bearer",
+  "refresh_token": "951612be84d04873aaef15817a603024",
+  "refresh_expires": 172800,
+  "refresh_expires_at": "2025-12-23T22:34:29.730Z",
+  "account_id": "702668b59afe48f4a40f66769d8b95a0",
+  "client_id": "ec684b8c687f479fadea3cb2ad83f5c6",
+  "internal_client": true,
+  "client_service": "prod-fn",
+  "scope": [
+    "basic_profile"
+  ],
+  "displayName": "Project Harvest",
+  "app": "prod-fn",
+  "in_app_id": "702668b59afe48f4a40f66769d8b95a0",
+  "product_id": "prod-fn",
+  "application_id": "fghi4567FNFBKFz3E4TROb0bmPS8h1GW",
+  "acr": "urn:epic:loa:aal2",
+  "auth_time": "2025-12-21T22:34:29.729Z"
+}
