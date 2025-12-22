@@ -20,7 +20,12 @@ const clientConfig = {
     rejectUnauthorized: false
   },
   requestTimeout: 30000,
-  maxRetries: 3
+  maxRetries: 3,
+  // Disable product check to allow OpenSearch compatibility
+  headers: {
+    'Accept': 'application/json',
+    'Content-Type': 'application/json'
+  }
 };
 
 // Add authentication if credentials are provided
@@ -31,6 +36,9 @@ if (OPENSEARCH_USERNAME && OPENSEARCH_PASSWORD) {
   };
   console.log('Using basic authentication');
 }
+
+// Disable product check for OpenSearch compatibility
+process.env.ELASTIC_CLIENT_APIVERSIONING = 'false';
 
 const client = new Client(clientConfig);
 
