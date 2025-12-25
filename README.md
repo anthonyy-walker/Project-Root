@@ -58,6 +58,7 @@ OPENSEARCH_USERNAME=admin
 OPENSEARCH_PASSWORD=your-password
 
 # Epic Games Configuration (optional overrides)
+# Note: Update FORTNITE_BRANCH to current Fortnite release version
 FORTNITE_BRANCH=++Fortnite+Release-32.10-CL-35815136-Windows
 EPIC_X_ACCESS_TOKEN=your_token_here
 
@@ -255,14 +256,14 @@ pm2 logs --lines 100
 
 ```bash
 # Cluster health
-curl -u admin:password 'https://your-opensearch-host:9200/_cluster/health?pretty'
+curl -u username:password 'https://your-opensearch-host:9200/_cluster/health?pretty'
 
 # List all indices
-curl -u admin:password 'https://your-opensearch-host:9200/_cat/indices?v'
+curl -u username:password 'https://your-opensearch-host:9200/_cat/indices?v'
 
 # Check document counts
-curl -u admin:password 'https://your-opensearch-host:9200/maps/_count?pretty'
-curl -u admin:password 'https://your-opensearch-host:9200/creators/_count?pretty'
+curl -u username:password 'https://your-opensearch-host:9200/maps/_count?pretty'
+curl -u username:password 'https://your-opensearch-host:9200/creators/_count?pretty'
 ```
 
 ## Troubleshooting
@@ -276,7 +277,7 @@ node -e "console.log(require('./data/tokenData.json'))"
 
 **Verify OpenSearch connection**:
 ```bash
-curl -u admin:password 'https://your-opensearch-host:9200'
+curl -u username:password 'https://your-opensearch-host:9200'
 ```
 
 **Check PM2 logs**:
@@ -322,7 +323,7 @@ pm2 logs --lines 200
 
 **Check OpenSearch indices**:
 ```bash
-curl -u admin:password 'https://your-opensearch-host:9200/_cat/indices?v'
+curl -u username:password 'https://your-opensearch-host:9200/_cat/indices?v'
 ```
 
 ## Advanced Configuration
