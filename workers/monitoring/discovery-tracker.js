@@ -41,7 +41,10 @@ const clientConfig = {
   },
   ssl: {
     rejectUnauthorized: false
-  }
+  },
+  maxRetries: 3,
+  requestTimeout: 30000,
+  compression: true
 };
 
 const es = new Client(clientConfig);

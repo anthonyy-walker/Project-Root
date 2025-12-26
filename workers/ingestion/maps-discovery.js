@@ -22,9 +22,9 @@ require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const OPENSEARCH_HOST = process.env.OPENSEARCH_HOST;
 const OPENSEARCH_USERNAME = process.env.OPENSEARCH_USERNAME;
 const OPENSEARCH_PASSWORD = process.env.OPENSEARCH_PASSWORD;
-const SCROLL_SIZE = 1000;
-const BATCH_SIZE = 50; // Process 50 creators in parallel (rate limited for 10-minute completion)
-const BATCH_DELAY = 2000; // 2-second delay between batches to ensure completion within 10 minutes
+const SCROLL_SIZE = 500; // Reduced scroll size
+const BATCH_SIZE = 25; // Reduced parallel processing
+const BATCH_DELAY = 3000; // 3-second delay between batches
 const ERROR_RETRY_DELAY = 5000;
 
 const clientConfig = {
@@ -35,7 +35,10 @@ const clientConfig = {
   },
   ssl: {
     rejectUnauthorized: false
-  }
+  },
+  maxRetries: 3,
+  requestTimeout: 30000,
+  compression: true
 };
 
 const es = new Client(clientConfig);

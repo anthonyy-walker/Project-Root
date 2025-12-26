@@ -23,8 +23,8 @@ const OPENSEARCH_HOST = process.env.OPENSEARCH_HOST;
 const OPENSEARCH_USERNAME = process.env.OPENSEARCH_USERNAME;
 const OPENSEARCH_PASSWORD = process.env.OPENSEARCH_PASSWORD;
 const BATCH_SIZE = 100; // Links Service supports 100 per request
-const SCROLL_SIZE = 10000; // ES scroll size - increased for faster fetching
-const ES_BULK_SIZE = 1000; // Elasticsearch bulk operation size - increased
+const SCROLL_SIZE = 1000; // Reduced to prevent memory overload
+const ES_BULK_SIZE = 250; // Reduced to prevent OpenSearch overload
 const REQUESTS_PER_MINUTE = 10; // Rate limit: 10 requests per minute
 const BATCH_DELAY = (60 / REQUESTS_PER_MINUTE) * 1000; // Delay between requests (6 seconds)
 const PARALLEL_BATCHES = 1; // Sequential processing to respect rate limit
@@ -38,7 +38,11 @@ const clientConfig = {
   },
   ssl: {
     rejectUnauthorized: false
-  }
+  },
+  maxRetries: 3,
+  requestTimeout: 60000,
+  compression: true,
+  maxResponseSize: 50000000 // 50MB max response size
 };
 
 // Initialize OpenSearch client

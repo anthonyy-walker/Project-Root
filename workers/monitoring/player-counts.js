@@ -24,9 +24,9 @@ const OPENSEARCH_HOST = process.env.OPENSEARCH_HOST;
 const OPENSEARCH_USERNAME = process.env.OPENSEARCH_USERNAME;
 const OPENSEARCH_PASSWORD = process.env.OPENSEARCH_PASSWORD;
 const SNAPSHOT_INTERVAL_MINUTES = 10; // Take snapshot every 10 minutes
-const BATCH_SIZE = 100; // Process 100 creators concurrently (optimized for 150k creators)
-const BATCH_DELAY = 300; // 300ms delay between batches (ensures completion within 10 min)
-const BULK_INSERT_SIZE = 500; // Bulk insert every 500 records
+const BATCH_SIZE = 20; // Reduced to prevent overwhelming OpenSearch
+const BATCH_DELAY = 2000; // 2-second delay between batches
+const BULK_INSERT_SIZE = 200; // Reduced bulk insert size
 
 const clientConfig = {
   node: OPENSEARCH_HOST,
@@ -36,7 +36,10 @@ const clientConfig = {
   },
   ssl: {
     rejectUnauthorized: false
-  }
+  },
+  maxRetries: 3,
+  requestTimeout: 30000,
+  compression: true
 };
 
 const es = new Client(clientConfig);
