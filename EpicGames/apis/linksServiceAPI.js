@@ -55,9 +55,6 @@ async function getBulkMnemonicInfo(mnemonics, accessToken, options = {}) {
       await new Promise(resolve => setTimeout(resolve, waitTime));
     }
     
-    console.log(`\n📦 Requesting bulk info for ${mnemonics.length} mnemonics...`);
-    console.log(`   First 3: ${mnemonics.slice(0, 3).join(', ')}`);
-    
     const response = await axios.post(
       `${LINKS_API_BASE}/fn/mnemonic?ignoreFailures=${ignoreFailures}`,
       body,
@@ -72,12 +69,6 @@ async function getBulkMnemonicInfo(mnemonics, accessToken, options = {}) {
     
     const validMaps = response.data?.length || 0;
     const notFound = mnemonics.length - validMaps;
-    
-    console.log(`✅ Response: ${validMaps} FOUND (200), ${notFound} NOT FOUND (404)`);
-    if (validMaps > 0) {
-      const mnemonicsFound = response.data.map(m => m.mnemonic).join(', ');
-      console.log(`   Found: ${mnemonicsFound}`);
-    }
     
     // Update last request time
     lastRequestTime = Date.now();

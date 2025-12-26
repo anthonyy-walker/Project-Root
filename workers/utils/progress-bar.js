@@ -16,6 +16,7 @@ class ProgressBar {
     this.errors = 0;
     this.warnings = 0;
     this.stats = {};
+    this.lastPercentLogged = -1; // Track last logged percentage for PM2
   }
 
   /**
@@ -61,62 +62,44 @@ class ProgressBar {
     const percentage = Math.floor((this.current / this.total) * 100);
     const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
     const rate = this.current / elapsed;
-    const remaining = Math.floor((this.total - this.current) / rate);
-    
-    // Progress bar visual
-    const barLength = 30;
-    const filled = Math.floor((this.current / this.total) * barLength);
-    const empty = barLength - filled;
-    const bar = '█'.repeat(filled) + '░'.repeat(empty);
+    const remaining = rate > 0 ? Math.floor((this.total - this.current) / rate) : 0;
     
     // Build stats string
     const statsStr = Object.entries(this.stats)
-      .map(([key, value]) => `${key}: ${value}`)
-      .join(', ');
+      .map(([key, value]) => `${key}: ${typeof value === 'number' ? value.toLocaleString() : value}`)
+      .join(' | ');
     
-    // Build status line
-    let status = `[${bar}] ${percentage}% | ${this.current}/${this.total}`;
-    status += ` | ${this.formatTime(elapsed)} elapsed`;
+    // Build status line - simple and PM2-friendly
+    let status = `[${this.current.toLocaleString()}/${this.total.toLocaleString()}] ${percentage}%`;
+    status += ` | ⏱️  ${this.formatTime(elapsed)}`;
     
     if (this.current < this.total && rate > 0) {
-      status += ` | ~${this.formatTime(remaining)} left`;
-    }
-    
-    if (this.errors > 0) {
-      status += ` | ❌ ${this.errors} errors`;
-    }
-    
-    if (this.warnings > 0) {
-      status += ` | ⚠️  ${this.warnings} warnings`;
+      status += ` | ETA: ${this.formatTime(remaining)}`;
     }
     
     if (statsStr) {
       status += ` | ${statsStr}`;
     }
     
-    // Check if we have a TTY (not in PM2 logs)
-    const isTTY = process.stdout.isTTY && typeof process.stdout.clearLine === 'function';
+    if (this.errors > 0) {
+      status += ` | ❌ ${this.errors}`;
+    }
     
-    if (isTTY) {
-      // Clear line and write (for terminal)
-      process.stdout.clearLine(0);
-      process.stdout.cursorTo(0);
-      process.stdout.write(`${this.taskName}: ${status}`);
-      
-      // New line if complete
-      if (this.current === this.total) {
-        console.log('');
-        this.logSummary();
-      }
-    } else {
-      // PM2 mode - log periodically instead of every update
-      // Only log every 10% progress or when complete
-      const percentComplete = Math.floor((this.current / this.total) * 10) * 10;
-      const lastPercentLogged = Math.floor(((this.current - 1) / this.total) * 10) * 10;
-      
-      if (this.current === this.total || percentComplete > lastPercentLogged) {
-        console.log(`${this.taskName}: ${status}`);
-      }
+    if (this.warnings > 0) {
+      status += ` | ⚠️  ${this.warnings}`;
+    }
+    
+    // ALWAYS use simple console.log for PM2 compatibility
+    // Log every 5% or at completion
+    const percentComplete = Math.floor(percentage / 5) * 5;
+    
+    if (!this.lastPercentLogged) {
+      this.lastPercentLogged = -1;
+    }
+    
+    if (this.current === this.total || percentComplete > this.lastPercentLogged) {
+      console.log(`📊 ${this.taskName}: ${status}`);
+      this.lastPercentLogged = percentComplete;
       
       if (this.current === this.total) {
         this.logSummary();

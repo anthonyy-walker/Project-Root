@@ -8,8 +8,8 @@
  * - Discover new maps not in maps index
  * - Create placeholder entries for Maps Collector to enrich
  *
- * Rate: 50 creators per batch with 2-second delays (completes within 10 minutes)
- * Speed: ~10 minutes for typical creator count
+ * Rate: 50 creators per batch with 6-second delays (completes within 1 hour)
+ * Speed: ~1 hour for typical creator count
  */
 
 const { Client } = require('@opensearch-project/opensearch');
@@ -22,24 +22,22 @@ require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const OPENSEARCH_HOST = process.env.OPENSEARCH_HOST;
 const OPENSEARCH_USERNAME = process.env.OPENSEARCH_USERNAME;
 const OPENSEARCH_PASSWORD = process.env.OPENSEARCH_PASSWORD;
-const SCROLL_SIZE = 500; // Reduced scroll size
-const BATCH_SIZE = 25; // Reduced parallel processing
-const BATCH_DELAY = 3000; // 3-second delay between batches
+const SCROLL_SIZE = 1000;
+const BATCH_SIZE = 50; // Process 50 creators in parallel
+const BATCH_DELAY = 6000; // 6-second delay between batches (targets ~1 hour completion)
 const ERROR_RETRY_DELAY = 5000;
 
 const clientConfig = {
   node: OPENSEARCH_HOST,
-  auth: {
+  ssl: { rejectUnauthorized: false }
+};
+
+if (OPENSEARCH_USERNAME && OPENSEARCH_PASSWORD) {
+  clientConfig.auth = {
     username: OPENSEARCH_USERNAME,
     password: OPENSEARCH_PASSWORD
-  },
-  ssl: {
-    rejectUnauthorized: false
-  },
-  maxRetries: 3,
-  requestTimeout: 30000,
-  compression: true
-};
+  };
+}
 
 const es = new Client(clientConfig);
 
@@ -67,11 +65,10 @@ async function checkExistingMaps(mapIds) {
  }
  });
 
- const responseBody = response.body || response;
  const existingIds = new Set();
 
- if (responseBody.docs) {
- responseBody.docs.forEach(doc => {
+ if (response.body.docs) {
+ response.body.docs.forEach(doc => {
  if (doc.found) {
  existingIds.add(doc._id);
  }
@@ -218,8 +215,9 @@ async function processBatch(creators) {
  */
 async function runWorker() {
  console.log('\n');
- console.log(' Worker 2B: Creator Maps Discovery (FAST) ');
- console.log(' No Rate Limit - Runs in ~15 min ');
+ console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+ console.log('  🗺️  Maps Discovery Worker');
+ console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
  console.log('\n');
 
  // Initialize authentication
@@ -227,7 +225,15 @@ async function runWorker() {
 
  while (true) {
  try {
- console.log(' Starting new discovery cycle...');
+ console.log('🔄 Starting new discovery cycle...');
+
+ // Reset stats for new cycle
+ stats.processed = 0;
+ stats.creatorsUpdated = 0;
+ stats.mapsDiscovered = 0;
+ stats.mapsAlreadyExist = 0;
+ stats.errors = 0;
+ stats.startTime = Date.now();
 
  // Scroll through all creators
  let scrollId = null;
@@ -243,10 +249,10 @@ async function runWorker() {
 
  scrollId = searchResponse.body._scroll_id;
  const totalCreators = searchResponse.body.hits.total.value;
- console.log(` Total creators to scan: ${totalCreators.toLocaleString()}`);
+ console.log(`📊 Total creators to scan: ${totalCreators.toLocaleString()}\n`);
 
- // Create progress bar
- const progress = new ProgressBar('Maps Discovery', totalCreators);
+ // Initialize progress bar
+ const progressBar = new ProgressBar('Discovery', totalCreators);
 
  let allCreators = searchResponse.body.hits.hits;
 
@@ -262,16 +268,13 @@ async function runWorker() {
  stats.processed += batch.length;
 
  // Update progress bar
- progress.update(stats.processed, {
- discovered: stats.mapsDiscovered,
- updated: stats.creatorsUpdated
+ progressBar.update(stats.processed, {
+ 'Updated': stats.creatorsUpdated,
+ 'New Maps': stats.mapsDiscovered,
+ 'Errors': stats.errors
  });
-   
- if (stats.errors > 0) {
- progress.addError(stats.errors);
- }
 
- // Add delay between batches to ensure completion within 10 minutes
+ // Add delay between batches to target ~1 hour completion
  if (batch.length === BATCH_SIZE) {
  await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
  }
@@ -292,25 +295,24 @@ async function runWorker() {
  await es.clearScroll({ scroll_id: scrollId });
  }
 
- const totalTime = ((Date.now() - stats.startTime) / 1000 / 60).toFixed(1);
- console.log('\n Discovery cycle complete!');
- console.log(` Time: ${totalTime} minutes`);
- console.log(` Creators scanned: ${stats.processed.toLocaleString()}`);
- console.log(` Creators updated: ${stats.creatorsUpdated.toLocaleString()}`);
- console.log(` New maps discovered: ${stats.mapsDiscovered.toLocaleString()}`);
- console.log(` Maps already tracked: ${stats.mapsAlreadyExist.toLocaleString()}`);
- console.log(` Errors: ${stats.errors}\n`);
+ // Final progress update
+ progressBar.update(stats.processed, {
+ 'Updated': stats.creatorsUpdated,
+ 'New Maps': stats.mapsDiscovered,
+ 'Errors': stats.errors
+ });
 
- // Reset stats for next cycle
- stats.processed = 0;
- stats.creatorsUpdated = 0;
- stats.mapsDiscovered = 0;
- stats.mapsAlreadyExist = 0;
- stats.errors = 0;
- stats.startTime = Date.now();
+ const totalTime = ((Date.now() - stats.startTime) / 1000 / 60).toFixed(1);
+ console.log('\n✅ Discovery cycle complete!');
+ console.log(`⏱️  Time: ${totalTime} minutes`);
+ console.log(`📊 Creators scanned: ${stats.processed.toLocaleString()}`);
+ console.log(`✏️  Creators updated: ${stats.creatorsUpdated.toLocaleString()}`);
+ console.log(`🆕 New maps discovered: ${stats.mapsDiscovered.toLocaleString()}`);
+ console.log(`📦 Maps already tracked: ${stats.mapsAlreadyExist.toLocaleString()}`);
+ console.log(`❌ Errors: ${stats.errors}\n`);
 
  // Wait before next cycle (run every hour)
- console.log(' Waiting 1 hour before next cycle...\n');
+ console.log('⏳ Waiting 1 hour before next cycle...\n');
  await new Promise(resolve => setTimeout(resolve, 60 * 60 * 1000));
 
  } catch (error) {

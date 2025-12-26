@@ -26,8 +26,6 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       watch: false,
-      max_memory_restart: '512M',
-      restart_delay: 5000,
       env: {
         NODE_ENV: 'production'
       },
@@ -42,8 +40,6 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       watch: false,
-      max_memory_restart: '256M',
-      restart_delay: 10000,
       env: {
         NODE_ENV: 'production'
       },
@@ -58,8 +54,6 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       watch: false,
-      max_memory_restart: '256M',
-      restart_delay: 15000,
       env: {
         NODE_ENV: 'production'
       },
@@ -74,9 +68,6 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       watch: false,
-      max_memory_restart: '512M',
-      restart_delay: 20000,
-      cron_restart: '5,15,25,35,45,55 * * * *', // Start at :05, :15, :25, etc (offset from :00)
       env: {
         NODE_ENV: 'production'
       },
@@ -91,8 +82,6 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       watch: false,
-      max_memory_restart: '256M',
-      restart_delay: 25000,
       env: {
         NODE_ENV: 'production'
       },

@@ -23,8 +23,9 @@ const OPENSEARCH_HOST = process.env.OPENSEARCH_HOST;
 const OPENSEARCH_USERNAME = process.env.OPENSEARCH_USERNAME;
 const OPENSEARCH_PASSWORD = process.env.OPENSEARCH_PASSWORD;
 const BATCH_SIZE = 100; // Links Service supports 100 per request
-const SCROLL_SIZE = 1000; // Reduced to prevent memory overload
-const ES_BULK_SIZE = 250; // Reduced to prevent OpenSearch overload
+const FETCH_BATCH_SIZE = 100; // Fetch existing docs in batches of 100 (matches Epic API batch)
+const SCROLL_SIZE = 10000; // ES scroll size - increased for faster fetching
+const ES_BULK_SIZE = 1000; // Elasticsearch bulk operation size - increased
 const REQUESTS_PER_MINUTE = 10; // Rate limit: 10 requests per minute
 const BATCH_DELAY = (60 / REQUESTS_PER_MINUTE) * 1000; // Delay between requests (6 seconds)
 const PARALLEL_BATCHES = 1; // Sequential processing to respect rate limit
@@ -32,18 +33,17 @@ const ERROR_RETRY_DELAY = 5000; // 5 seconds
 
 const clientConfig = {
   node: OPENSEARCH_HOST,
-  auth: {
-    username: OPENSEARCH_USERNAME,
-    password: OPENSEARCH_PASSWORD
-  },
   ssl: {
     rejectUnauthorized: false
-  },
-  maxRetries: 3,
-  requestTimeout: 60000,
-  compression: true,
-  maxResponseSize: 50000000 // 50MB max response size
+  }
 };
+
+if (OPENSEARCH_USERNAME && OPENSEARCH_PASSWORD) {
+  clientConfig.auth = {
+    username: OPENSEARCH_USERNAME,
+    password: OPENSEARCH_PASSWORD
+  };
+}
 
 // Initialize OpenSearch client
 const es = new Client(clientConfig);
@@ -197,11 +197,6 @@ function detectChanges(oldDoc, newDoc) {
    changelog.linkState = { Old: oldDoc.linkState, New: newDoc.linkState };
  }
 
- // Check disabled status
- if (oldDoc.disabled !== newDoc.disabled) {
-   changelog.disabled = { Old: oldDoc.disabled, New: newDoc.disabled };
- }
-
  // Check matchmaking player counts
  if (getOldValue('maxPlayers') !== getNewValue('maxPlayers')) {
    changelog.maxPlayers = { Old: getOldValue('maxPlayers'), New: getNewValue('maxPlayers') };
@@ -221,62 +216,6 @@ function detectChanges(oldDoc, newDoc) {
    changelog.mode = { Old: getOldValue('mode'), New: getNewValue('mode') };
  }
 
- // Check descriptionTags array
- const oldDescTags = (oldDoc.descriptionTags || []).sort().join(',');
- const newDescTags = (newDoc.descriptionTags || []).sort().join(',');
- if (oldDescTags !== newDescTags) {
-   changelog.descriptionTags = { Old: oldDoc.descriptionTags || [], New: newDoc.descriptionTags || [] };
- }
-
- // Check activation dates
- if (oldDoc.lastActivatedDate !== newDoc.lastActivatedDate) {
-   changelog.lastActivatedDate = { Old: oldDoc.lastActivatedDate, New: newDoc.lastActivatedDate };
- }
-
- const oldActivatedPublic = oldDoc.metadata?.activated_public_date;
- const newActivatedPublic = newDoc.metadata?.activated_public_date;
- if (oldActivatedPublic !== newActivatedPublic) {
-   changelog.activatedPublicDate = { Old: oldActivatedPublic, New: newActivatedPublic };
- }
-
- // Check timestamps from Epic
- if (oldDoc.created !== newDoc.created) {
-   changelog.created = { Old: oldDoc.created, New: newDoc.created };
- }
-
- if (oldDoc.updated !== newDoc.updated) {
-   changelog.updated = { Old: oldDoc.updated, New: newDoc.updated };
- }
-
- // Check code (alternative linkcode field)
- if (oldDoc.code !== newDoc.code) {
-   changelog.code = { Old: oldDoc.code, New: newDoc.code };
- }
-
- // Check projectId
- const oldProjectId = oldDoc.metadata?.projectId;
- const newProjectId = newDoc.metadata?.projectId;
- if (oldProjectId !== newProjectId) {
-   changelog.projectId = { Old: oldProjectId, New: newProjectId };
- }
-
- // Check locale
- const oldLocale = oldDoc.metadata?.locale;
- const newLocale = newDoc.metadata?.locale;
- if (oldLocale !== newLocale) {
-   changelog.locale = { Old: oldLocale, New: newLocale };
- }
-
- // Check ESRB descriptors
- const oldEsrbDesc = (oldDoc.metadata?.ratings?.boards?.ESRB?.descriptors || []).sort().join(',');
- const newEsrbDesc = (newDoc.metadata?.ratings?.boards?.ESRB?.descriptors || []).sort().join(',');
- if (oldEsrbDesc !== newEsrbDesc) {
-   changelog.esrbDescriptors = { 
-     Old: oldDoc.metadata?.ratings?.boards?.ESRB?.descriptors || [], 
-     New: newDoc.metadata?.ratings?.boards?.ESRB?.descriptors || [] 
-   };
- }
-
  return Object.keys(changelog).length > 0 ? changelog : null;
 }
 
@@ -285,30 +224,25 @@ function detectChanges(oldDoc, newDoc) {
  * Returns documents ready for bulk indexing
  */
 async function processBatch(mapIds, existingDocs) {
- try {
- // Get valid token
- const tokenData = await getValidToken();
- accessToken = tokenData.access_token;
+  try {
+    // Get valid token
+    const tokenData = await getValidToken();
+    accessToken = tokenData.access_token;
 
- console.log(`Requesting bulk info for ${mapIds.length} mnemonics...`);
+    // Fetch from bulk Links Service (100 maps in one request!)
+    const linksData = await getBulkMnemonicInfo(mapIds, accessToken, {
+      ignoreFailures: true
+    });
 
- // Fetch from bulk Links Service (100 maps in one request!)
- const linksData = await getBulkMnemonicInfo(mapIds, accessToken, {
- ignoreFailures: true
- });
+    if (!linksData || linksData.length === 0) {
+      stats.errors += mapIds.length;
+      return { documents: [], changes: [], newCreators: [] };
+    }
 
- console.log(`Received ${linksData?.length || 0} results`);
-
- if (!linksData || linksData.length === 0) {
- console.log(` Batch of ${mapIds.length}: No data returned`);
- stats.errors += mapIds.length;
- return { documents: [], changes: [], newCreators: [] };
- }
-
- // Transform to new schema format with performance preservation
- const documents = [];
- const changes = [];
- const newCreators = [];
+    // Transform to new schema format with performance preservation
+    const documents = [];
+    const changes = [];
+    const newCreators = [];
 
  for (const data of linksData) {
  const mapId = data.mnemonic;
@@ -489,60 +423,57 @@ async function processNewCreators(creatorList) {
 }
 
 /**
- * Fetch all map codes from maps index
+ * Fetch all map codes quickly - prioritize maps with recent activity
  */
 async function fetchAllMapCodes() {
- console.log(' Fetching all map codes from maps index...');
+ console.log(' Fetching all map codes...');
  const mapCodes = [];
  
  try {
- // Fetch all maps using scroll API
- let response = await es.search({
- index: 'maps',
- scroll: '5m',
- size: SCROLL_SIZE,
- _source: ['mnemonic'],
+ // First, get maps from recent CCU data (these are definitely active)
+ console.log(' Fetching maps from recent CCU data (active maps)...');
+ const ccuMaps = await es.search({
+ index: 'concurrent-users-*',
+ size: 0,
+ body: {
+ aggs: {
+ unique_maps: {
+ terms: {
+ field: 'map_id.keyword',
+ size: 50000 // Get up to 50k unique maps
+ }
+ }
+ }
+ }
+ });
+ 
+ const ccuMapCodes = (ccuMaps.body?.aggregations || ccuMaps.aggregations)?.unique_maps.buckets.map(b => b.key) || [];
+ console.log(` Found ${ccuMapCodes.length} maps from CCU data`);
+ mapCodes.push(...ccuMapCodes);
+ 
+ // Then get maps from discovery (featured maps)
+ console.log(' Fetching maps from discovery data...');
+ const discoveryMaps = await es.search({
+ index: 'discovery-current',
+ size: 10000,
+ _source: ['map_id'],
  body: {
  query: { match_all: {} }
  }
  });
  
- let scrollId = response.body._scroll_id || response._scroll_id;
- let hits = response.body.hits?.hits || response.hits?.hits || [];
+ const discoveryMapCodes = (discoveryMaps.body?.hits.hits || discoveryMaps.hits?.hits || [])
+ .map(hit => hit._source.map_id)
+ .filter(id => id && !mapCodes.includes(id));
+ console.log(` Found ${discoveryMapCodes.length} additional maps from discovery`);
+ mapCodes.push(...discoveryMapCodes);
  
- // Add first batch
- mapCodes.push(...hits.map(hit => hit._id).filter(id => id && id.match(/^\d{4}-\d{4}-\d{4}$/)));
+ // Deduplicate and validate format
+ const uniqueMapCodes = [...new Set(mapCodes)]
+ .filter(id => id && id.match(/^\d{4}-\d{4}-\d{4}$/));
  
- console.log(` Loaded ${mapCodes.length.toLocaleString()} maps...`);
- 
- // Scroll through remaining batches
- while (hits.length > 0) {
- response = await es.scroll({
- scroll_id: scrollId,
- scroll: '5m'
- });
- 
- scrollId = response.body._scroll_id || response._scroll_id;
- hits = response.body.hits?.hits || response.hits?.hits || [];
- 
- if (hits.length > 0) {
- mapCodes.push(...hits.map(hit => hit._id).filter(id => id && id.match(/^\d{4}-\d{4}-\d{4}$/)));
- 
- if (mapCodes.length % 50000 === 0) {
- console.log(` Loaded ${mapCodes.length.toLocaleString()} maps...`);
- }
- }
- }
- 
- // Clear scroll
- try {
- await es.clearScroll({ scroll_id: scrollId });
- } catch (e) {
- // Ignore errors clearing scroll
- }
- 
- console.log(` ✓ Total map codes from index: ${mapCodes.length.toLocaleString()}\n`);
- return mapCodes;
+ console.log(` ✓ Total unique valid map codes: ${uniqueMapCodes.length.toLocaleString()}\n`);
+ return uniqueMapCodes;
  } catch (error) {
  console.error('❌ Error fetching map codes:', error.message);
  return [];
@@ -581,15 +512,15 @@ async function runWorker() {
  console.log('📦 Fetching existing map data for performance preservation...');
  const existingDocs = new Map();
  
- for (let i = 0; i < allMapCodes.length; i += 1000) {
- const chunk = allMapCodes.slice(i, i + 1000);
+ for (let i = 0; i < allMapCodes.length; i += FETCH_BATCH_SIZE) {
+ const chunk = allMapCodes.slice(i, i + FETCH_BATCH_SIZE);
  const existing = await fetchExistingBulk(chunk);
  for (const [key, value] of existing.entries()) {
  existingDocs.set(key, value);
  }
  
- if ((i + 1000) % 10000 === 0) {
- console.log(` Loaded ${Math.min(i + 1000, totalMaps).toLocaleString()}/${totalMaps.toLocaleString()} existing documents...`);
+ if ((i + FETCH_BATCH_SIZE) % 5000 === 0 || i === 0) {
+ console.log(` Loaded ${Math.min(i + FETCH_BATCH_SIZE, totalMaps).toLocaleString()}/${totalMaps.toLocaleString()} existing documents...`);
  }
  }
  console.log(` ✓ Loaded ${existingDocs.size.toLocaleString()} existing documents\n`);
@@ -598,8 +529,8 @@ async function runWorker() {
  console.log('⚙️  Processing maps in batches from Epic API...\n');
  console.log(`⚡ Rate limit: ${REQUESTS_PER_MINUTE} requests/min (${BATCH_SIZE} maps per request, ${BATCH_DELAY/1000}s delay)\n`);
  
- // Create progress bar
- const progress = new ProgressBar('Maps Collector', totalMaps);
+ // Initialize progress bar
+ const progressBar = new ProgressBar('Maps Collector', totalMaps);
  
  let allDocuments = [];
  let allChanges = [];
@@ -618,14 +549,11 @@ async function runWorker() {
  allNewCreators.push(...result.newCreators);
 
  // Update progress bar
- progress.update(stats.processed, {
- changes: stats.changeDetected,
- indexed: allDocuments.length
+ progressBar.update(stats.processed, {
+   'Updated': stats.updated,
+   'Changes': stats.changeDetected,
+   'Errors': stats.errors
  });
- 
- if (stats.errors > 0) {
- progress.addError(stats.errors);
- }
 
  // Bulk index accumulated documents
  if (allDocuments.length >= ES_BULK_SIZE) {
@@ -644,6 +572,8 @@ async function runWorker() {
  await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
  }
  }
+ 
+ progressBar.finish();
 
  // PHASE 4: Index remaining documents
  console.log('\n💾 Indexing remaining documents...');

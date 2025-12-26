@@ -21,24 +21,24 @@ require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const OPENSEARCH_HOST = process.env.OPENSEARCH_HOST;
 const OPENSEARCH_USERNAME = process.env.OPENSEARCH_USERNAME;
 const OPENSEARCH_PASSWORD = process.env.OPENSEARCH_PASSWORD;
-const SCROLL_SIZE = 500; // Reduced scroll size
-const BATCH_SIZE = 15; // Reduced parallel processing
+const SCROLL_SIZE = 1000;
+const BATCH_SIZE = 24; // Process 24 creators in parallel (safer rate)
 const BATCH_DELAY = 60000; // Wait 1 minute (60 seconds) between batches
 const ERROR_RETRY_DELAY = 5000;
 
 const clientConfig = {
   node: OPENSEARCH_HOST,
-  auth: {
-    username: OPENSEARCH_USERNAME,
-    password: OPENSEARCH_PASSWORD
-  },
   ssl: {
     rejectUnauthorized: false
-  },
-  maxRetries: 3,
-  requestTimeout: 30000,
-  compression: true
+  }
 };
+
+if (OPENSEARCH_USERNAME && OPENSEARCH_PASSWORD) {
+  clientConfig.auth = {
+    username: OPENSEARCH_USERNAME,
+    password: OPENSEARCH_PASSWORD
+  };
+}
 
 const es = new Client(clientConfig);
 
@@ -213,24 +213,24 @@ async function processCreator(creatorId) {
  const updateDoc = {
  id: creatorId,
  account_id: creatorId,
- display_name: popsData?.displayName || existing?._source?.display_name || null,
- bio: popsData?.bio || existing?._source?.bio || null,
- follower_count: popsData?.followerCount || existing?._source?.follower_count || 0,
+ display_name: popsData?.displayName || existing?.body?._source?.display_name || null,
+ bio: popsData?.bio || existing?.body?._source?.bio || null,
+ follower_count: popsData?.followerCount || existing?.body?._source?.follower_count || 0,
  images: {
- avatar: popsData?.images?.avatar || existing?._source?.images?.avatar || null,
- banner: popsData?.images?.banner || existing?._source?.images?.banner || null
+ avatar: popsData?.images?.avatar || existing?.body?._source?.images?.avatar || null,
+ banner: popsData?.images?.banner || existing?.body?._source?.images?.banner || null
  },
  social: {
- youtube: popsData?.social?.youtube || existing?._source?.social?.youtube || null,
- twitter: popsData?.social?.twitter || existing?._source?.social?.twitter || null,
- twitch: popsData?.social?.twitch || existing?._source?.social?.twitch || null,
- instagram: popsData?.social?.instagram || existing?._source?.social?.instagram || null,
- tiktok: popsData?.social?.tiktok || existing?._source?.social?.tiktok || null
+ youtube: popsData?.social?.youtube || existing?.body?._source?.social?.youtube || null,
+ twitter: popsData?.social?.twitter || existing?.body?._source?.social?.twitter || null,
+ twitch: popsData?.social?.twitch || existing?.body?._source?.social?.twitch || null,
+ instagram: popsData?.social?.instagram || existing?.body?._source?.social?.instagram || null,
+ tiktok: popsData?.social?.tiktok || existing?.body?._source?.social?.tiktok || null
  },
  is_followed: popsData?.isFollowed || false,
  is_subscribed: popsData?.isSubscribed || false,
  metadata: {
- ...existing?._source?.metadata,
+ ...existing?.body?._source?.metadata,
  last_synced: new Date(),
  last_updated: new Date(),
  api_version: 1
@@ -238,12 +238,12 @@ async function processCreator(creatorId) {
  };
 
  // Detect changes (POPS fields only, excluding follower_count)
- const changes = existing ? detectChanges(existing._source, popsData) : null;
+ const changes = existing ? detectChanges(existing.body._source, popsData) : null;
 
  // Track follower count changes separately in dedicated index
  const followerCountChanged = existing &&
  popsData?.followerCount !== undefined &&
- popsData.followerCount !== existing._source.follower_count;
+ popsData.followerCount !== existing.body._source.follower_count;
 
  if (followerCountChanged) {
  // Log to dedicated follower history index (for graphing)
@@ -282,7 +282,7 @@ async function processCreator(creatorId) {
 
  } catch (error) {
  stats.errors++;
- // Silently count errors - progress bar will show them
+ console.error(`❌ Error processing creator ${creatorId}:`, error.message);
  return false;
  }
 }
@@ -344,17 +344,13 @@ async function runWorker() {
 
  console.log(` Processing in batches of ${BATCH_SIZE} (30/min rate limit)\n`);
 
- // Create progress bar
- const progress = new ProgressBar('Profiles', totalCreators);
-
- // Reset error counter for this cycle
- let cycleErrors = 0;
+ // Initialize progress bar
+ const progressBar = new ProgressBar('Profiles Collector', totalCreators);
 
  // Process creators in parallel batches of 30 with staggered delays
  for (let i = 0; i < allCreatorIds.length; i += BATCH_SIZE) {
    const batch = allCreatorIds.slice(i, i + BATCH_SIZE);
    const batchStart = Date.now();
-   const previousErrors = stats.errors;
 
    // Process batch with 2.5-second stagger between each request to avoid rate limits
    // 24 requests * 2.5 seconds = 60 seconds total (24/min = safer than 30/min)
@@ -368,24 +364,19 @@ async function runWorker() {
    await Promise.all(promises);
 
    stats.processed += batch.length;
-   
-   // Calculate errors in this batch
-   const batchErrors = stats.errors - previousErrors;
-   cycleErrors += batchErrors;
 
    // Update progress bar
-   progress.update(stats.processed, {
-     Updated: stats.updated,
-     Deleted: stats.deleted,
-     Changes: stats.changeDetected,
-     Errors: cycleErrors
+   progressBar.update(stats.processed, {
+     'Updated': stats.updated,
+     'Deleted': stats.deleted,
+     'Changes': stats.changeDetected,
+     'Errors': stats.errors
    });
 
    // No additional wait needed since staggered delays already took ~60 seconds
  }
- 
- // Complete progress bar
- progress.finish();
+
+ progressBar.finish();
 
  console.log('✓ Ingestion cycle complete\n');
 
