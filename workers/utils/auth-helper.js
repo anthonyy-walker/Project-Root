@@ -13,7 +13,7 @@ const TOKEN_CACHE_MS = 60 * 1000; // Cache token for 1 minute
 /**
  * Initialize authentication system
  * Call this once when worker starts
- */
+ *  */
 function initializeAuth() {
  console.log('🔐 Initializing Epic Games authentication...');
 

@@ -2,7 +2,11 @@
 const { ENDPOINTS, buildUrl, buildUrlWithParams } = require('../config/endpoints');
 const Logger = require('../utils/Logger');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+
+// Only load .env if running standalone (not via PM2)
+if (!process.env.FORTNITE_BRANCH) {
+  require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+}
 
 const logger = Logger.create('mnemonicInfoAPI.js');
 

@@ -11,7 +11,11 @@ const logger = Logger.create('discoveryClient');
 
 // Load environment variables from root
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../../../.env') });
+
+// Only load .env if running standalone (not via PM2)
+if (!process.env.EPIC_ACCESS_TOKEN) {
+  require('dotenv').config({ path: path.join(__dirname, '../../../.env') });
+}
 
 const MATCHMAKING_REGIONS = process.env.MATCHMAKING_REGIONS ? 
   process.env.MATCHMAKING_REGIONS.split(',').map(region => region.trim()) : 

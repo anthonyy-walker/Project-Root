@@ -2,7 +2,11 @@ const httpClient = require('../http/httpClient');
 const { ENDPOINTS, buildUrl, buildUrlWithParams } = require('../config/endpoints');
 const Logger = require('../utils/Logger');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+
+// Only load .env if running standalone (not via PM2)
+if (!process.env.EPIC_ACCESS_TOKEN) {
+  require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+}
 
 const logger = Logger.create('creatorPageAPI.js');
 
@@ -29,7 +33,7 @@ async function getCreatorMaps(creatorAccountId, accessToken = null, playerId = n
   }
 
   try {
-    log.info(`Fetching maps for creator: ${creatorAccountId}`);
+    // log.info(`Fetching maps for creator: ${creatorAccountId}`);
 
     // Build URL with query parameters
     const baseUrl = buildUrl(ENDPOINTS.CREATOR_PAGE, creatorAccountId);
@@ -46,14 +50,14 @@ async function getCreatorMaps(creatorAccountId, accessToken = null, playerId = n
     const responseData = response.data || {};
     
     if (responseData.links && Array.isArray(responseData.links)) {
-      log.info(`Found ${responseData.links.length} maps for creator ${creatorAccountId}`);
+      // log.info(`Found ${responseData.links.length} maps for creator ${creatorAccountId}`);
       
       // Check if there are more results that need to be paginated
       if (responseData.hasMore === true) {
-        log.info(`More maps available for creator ${creatorAccountId}. Use olderThan for pagination.`);
+        // log.info(`More maps available for creator ${creatorAccountId}. Use olderThan for pagination.`);
       }
     } else {
-      log.info(`No links found in response for creator ${creatorAccountId}`);
+      // log.info(`No links found in response for creator ${creatorAccountId}`);
     }
     
     return responseData;

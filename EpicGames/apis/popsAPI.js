@@ -3,7 +3,11 @@ const httpClient = require('../http/httpClient');
 const { ENDPOINTS, buildUrl, buildUrlWithParams } = require('../config/endpoints');
 const Logger = require('../utils/Logger');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+
+// Only load .env if running standalone (not via PM2)
+if (!process.env.EPIC_ACCESS_TOKEN) {
+  require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+}
 
 const logger = Logger.create('popsAPI.js');
 
@@ -28,7 +32,7 @@ async function getCreatorDetails(creatorAccountId, accessToken = null, accountId
     }
 
     try {
-        log.info(`Fetching creator details for: ${creatorAccountId}`);
+        // log.info(`Fetching creator details for: ${creatorAccountId}`); // Silenced for cleaner logs
 
         const baseUrl = buildUrl(ENDPOINTS.POPS, `v1/${creatorAccountId}`);
         const url = buildUrlWithParams(baseUrl, { playerId });
@@ -36,7 +40,7 @@ async function getCreatorDetails(creatorAccountId, accessToken = null, accountId
         const headers = httpClient.createHeaders(token);
         const response = await httpClient.get(url, { headers });
 
-        log.info(`Retrieved creator details for ${creatorAccountId}`);
+        // log.info(`Retrieved creator details for ${creatorAccountId}`); // Silenced for cleaner logs
         return response.data;
     } catch (error) {
         log.error(`Failed to fetch creator details for ${creatorAccountId}`, error);

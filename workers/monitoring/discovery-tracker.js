@@ -11,7 +11,7 @@
  * - Conservative rate limiting: 100ms delay between API calls
  */
 
-const { Client } = require('@elastic/elasticsearch');
+const { Client } = require('@opensearch-project/opensearch');
 const DiscoveryClient = require('../../EpicGames/apis/discovery/discoveryClient');
 const { getMnemonicInfo } = require('../../EpicGames/apis/mnemonicInfoAPI');
 const { initializeAuth, getAccessToken, getAccountId } = require('../utils/auth-helper');
@@ -35,16 +35,14 @@ const MATCHMAKING_REGIONS = process.env.MATCHMAKING_REGIONS ?
 
 const clientConfig = {
   node: OPENSEARCH_HOST,
-  requestTimeout: 30000,
-  ssl: { rejectUnauthorized: false }
-};
-
-if (OPENSEARCH_USERNAME && OPENSEARCH_PASSWORD) {
-  clientConfig.auth = {
+  auth: {
     username: OPENSEARCH_USERNAME,
     password: OPENSEARCH_PASSWORD
-  };
-}
+  },
+  ssl: {
+    rejectUnauthorized: false
+  }
+};
 
 const es = new Client(clientConfig);
 
@@ -61,7 +59,7 @@ async function getCurrentDiscoverySnapshot() {
  }
  });
 
- return response.hits.hits.map(h => h._source);
+ return response.body.hits.hits.map(h => h._source);
  } catch (error) {
  console.error('Error fetching discovery snapshot:', error.message);
  return [];

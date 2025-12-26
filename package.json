@@ -18,7 +18,10 @@
   "license": "ISC",
   "description": "Fortnite Creative data collection and ingestion",
   "dependencies": {
+    "@aws-sdk/credential-provider-node": "^3.958.0",
     "@elastic/elasticsearch": "^8.19.1",
+    "@opensearch-project/opensearch": "^3.5.1",
+    "aws4": "^1.13.2",
     "axios": "^1.13.2",
     "dotenv": "^17.2.3",
     "node-cron": "^4.2.1"

@@ -17,107 +17,31 @@ function transformMapData(linksData, options = {}) {
   
   const now = new Date().toISOString();
   
-  // Extract image URLs
-  const images = linksData.metadata?.image_urls || {};
-  
-  // Extract matchmaking info
-  const matchmaking = linksData.metadata?.matchmakingV2 || linksData.metadata?.matchmaking || {};
-  
-  // Extract ratings (use ESRB as primary)
-  const esrbRating = linksData.metadata?.ratings?.boards?.ESRB?.rating || 'UNRATED';
-  
-  // Build the transformed document
+  // Save the COMPLETE Epic response (no transformation)
+  // This preserves all fields exactly as Epic sends them
   const transformed = {
-    // Primary identifier
+    // Spread all top-level Epic fields
+    ...linksData,
+    
+    // Override/add these for consistency
     code: linksData.mnemonic,
     
-    // Basic info (fn360 compatible fields)
-    title: linksData.metadata?.title || 'Untitled',
-    description: linksData.metadata?.introduction || '',
-    tagline: linksData.metadata?.tagline || '',
+    // Add our custom fields (preserve if they exist from previous ingestion)
+    currentCCU: preservePerformance?.currentCCU ?? 0,
+    peakCCU24h: preservePerformance?.peakCCU24h ?? 0,
+    avgCCU24h: preservePerformance?.avgCCU24h ?? 0,
+    avgCCU7d: preservePerformance?.avgCCU7d ?? 0,
+    avgCCU30d: preservePerformance?.avgCCU30d ?? 0,
     
-    // Creator info
-    creatorAccountId: linksData.accountId,
-    creatorName: linksData.creatorName || 'Unknown',
+    inDiscovery: preserveDiscovery?.inDiscovery ?? false,
+    discoveryAppearances7d: preserveDiscovery?.discoveryAppearances7d ?? 0,
+    bestDiscoveryPosition: preserveDiscovery?.bestDiscoveryPosition ?? null,
+    discoveryFirstSeen: preserveDiscovery?.discoveryFirstSeen ?? null,
+    discoveryLastSeen: preserveDiscovery?.discoveryLastSeen ?? null,
     
-    // Images (fn360 field names)
-    image: images.url || images.image_url || '',
-    imageMedium: images.url_m || '',
-    imageSmall: images.url_s || '',
-    
-    // Epic metadata
-    namespace: linksData.namespace,
-    linkType: linksData.linkType,
-    linkState: linksData.linkState || 'ACTIVE',
-    linkCategory: linksData.linkCategory || '',
-    
-    // Status
-    active: linksData.active !== false,
-    disabled: linksData.disabled === true,
-    moderationStatus: linksData.moderationStatus || 'Unknown',
-    discoveryIntent: linksData.discoveryIntent || '',
-    
-    // Dates
-    created: linksData.created || now,
-    published: linksData.published || linksData.created || now,
-    updated: linksData.updated || now,
-    lastActivatedDate: linksData.lastActivatedDate || null,
-    activatedPublicDate: linksData.metadata?.activated_public_date || null,
-    
-    // Version
-    version: linksData.version || 1,
-    
-    // Tags and categories
-    tags: linksData.descriptionTags || [],
-    categoryLabels: linksData.metadata?.category_labels || [],
-    genreLabels: linksData.metadata?.genre_labels || [],
-    
-    // Matchmaking
-    minPlayers: matchmaking.minPlayers || 1,
-    maxPlayers: matchmaking.maxPlayers || 16,
-    maxTeamSize: matchmaking.maxTeamSize || null,
-    maxTeamCount: matchmaking.maxTeamCount || null,
-    allowJoinInProgress: matchmaking.allowJoinInProgress !== false,
-    useSkillBasedMatchmaking: matchmaking.useSkillBasedMatchmaking === true,
-    
-    // Ratings
-    contentRating: esrbRating,
-    
-    // Support & attribution
-    supportCode: linksData.metadata?.supportCode || null,
-    attributions: linksData.metadata?.attributions || '',
-    
-    // Mode
-    mode: linksData.metadata?.mode || 'live',
-    
-    // Localized content (store for multi-language support) - NOT indexed
-    localizedTitles: linksData.metadata?.alt_title || {},
-    localizedDescriptions: linksData.metadata?.alt_introduction || {},
-    localizedTaglines: linksData.metadata?.alt_tagline || {},
-    
-    // Store full metadata for future reference - NOT indexed to avoid field explosion
-    rawMetadata: linksData.metadata || {},
-    
-    // Performance metrics (preserve existing if available, otherwise defaults)
-    currentCCU: preservePerformance?.currentCCU || 0,
-    peakCCU24h: preservePerformance?.peakCCU24h || 0,
-    avgCCU24h: preservePerformance?.avgCCU24h || 0,
-    avgCCU7d: preservePerformance?.avgCCU7d || 0,
-    avgCCU30d: preservePerformance?.avgCCU30d || 0,
-    
-    // Discovery tracking (preserve existing if available)
-    inDiscovery: preserveDiscovery?.inDiscovery || false,
-    discoveryAppearances7d: preserveDiscovery?.discoveryAppearances7d || 0,
-    bestDiscoveryPosition: preserveDiscovery?.bestDiscoveryPosition || null,
-    discoveryFirstSeen: preserveDiscovery?.discoveryFirstSeen || null,
-    discoveryLastSeen: preserveDiscovery?.discoveryLastSeen || null,
-    
-    // Timestamps
-    firstIndexed: preservePerformance?.firstIndexed || now,
+    firstIndexed: preservePerformance?.firstIndexed ?? now,
     lastUpdated: now,
-    lastCalculated: preservePerformance?.lastCalculated || now,
-    
-    // Source tracking
+    lastCalculated: preservePerformance?.lastCalculated ?? now,
     ingestionSource: ingestionSource
   };
   

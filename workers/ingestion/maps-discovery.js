@@ -12,9 +12,10 @@
  * Speed: ~10 minutes for typical creator count
  */
 
-const { Client } = require('@elastic/elasticsearch');
+const { Client } = require('@opensearch-project/opensearch');
 const { getCreatorMaps } = require('../../EpicGames/apis/creatorPageAPI');
 const { initializeAuth, getAccessToken, getAccountId } = require('../utils/auth-helper');
+const { ProgressBar } = require('../utils/progress-bar');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
@@ -28,16 +29,14 @@ const ERROR_RETRY_DELAY = 5000;
 
 const clientConfig = {
   node: OPENSEARCH_HOST,
-  requestTimeout: 30000,
-  ssl: { rejectUnauthorized: false }
-};
-
-if (OPENSEARCH_USERNAME && OPENSEARCH_PASSWORD) {
-  clientConfig.auth = {
+  auth: {
     username: OPENSEARCH_USERNAME,
     password: OPENSEARCH_PASSWORD
-  };
-}
+  },
+  ssl: {
+    rejectUnauthorized: false
+  }
+};
 
 const es = new Client(clientConfig);
 
@@ -239,11 +238,14 @@ async function runWorker() {
  }
  });
 
- scrollId = searchResponse._scroll_id;
- const totalCreators = searchResponse.hits.total.value;
+ scrollId = searchResponse.body._scroll_id;
+ const totalCreators = searchResponse.body.hits.total.value;
  console.log(` Total creators to scan: ${totalCreators.toLocaleString()}`);
 
- let allCreators = searchResponse.hits.hits;
+ // Create progress bar
+ const progress = new ProgressBar('Maps Discovery', totalCreators);
+
+ let allCreators = searchResponse.body.hits.hits;
 
  while (allCreators.length > 0) {
  // Process batch in parallel with rate limiting
@@ -256,16 +258,19 @@ async function runWorker() {
  await processBatch(batch);
  stats.processed += batch.length;
 
+ // Update progress bar
+ progress.update(stats.processed, {
+ discovered: stats.mapsDiscovered,
+ updated: stats.creatorsUpdated
+ });
+   
+ if (stats.errors > 0) {
+ progress.addError(stats.errors);
+ }
+
  // Add delay between batches to ensure completion within 10 minutes
  if (batch.length === BATCH_SIZE) {
  await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
- }
-
- // Log progress every 1000 creators
- if (stats.processed % 1000 === 0) {
- const elapsed = ((Date.now() - stats.startTime) / 1000 / 60).toFixed(1);
- const rate = (stats.processed / elapsed).toFixed(0);
- console.log(` Processed: ${stats.processed.toLocaleString()}/${totalCreators.toLocaleString()} | Rate: ${rate}/min | New Maps: ${stats.mapsDiscovered} | Updated: ${stats.creatorsUpdated} | Errors: ${stats.errors}`);
  }
  }
 
@@ -275,8 +280,8 @@ async function runWorker() {
  scroll: '5m'
  });
 
- allCreators = scrollResponse.hits.hits;
- scrollId = scrollResponse._scroll_id;
+ allCreators = scrollResponse.body.hits.hits;
+ scrollId = scrollResponse.body._scroll_id;
  }
 
  // Clear scroll

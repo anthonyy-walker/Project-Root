@@ -12,7 +12,6 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: false,
       watch: false,
-      max_memory_restart: '1G',
       env: {
         NODE_ENV: 'production'
       },
@@ -27,7 +26,6 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       watch: false,
-      max_memory_restart: '1G',
       env: {
         NODE_ENV: 'production'
       },
@@ -42,7 +40,6 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       watch: false,
-      max_memory_restart: '512M',
       env: {
         NODE_ENV: 'production'
       },
@@ -57,7 +54,6 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       watch: false,
-      max_memory_restart: '512M',
       env: {
         NODE_ENV: 'production'
       },
@@ -72,7 +68,6 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       watch: false,
-      max_memory_restart: '512M',
       env: {
         NODE_ENV: 'production'
       },
@@ -87,7 +82,6 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       watch: false,
-      max_memory_restart: '500M',
       env: {
         NODE_ENV: 'production'
       },

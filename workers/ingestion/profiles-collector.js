@@ -11,9 +11,10 @@
  * - Does NOT track maps (see Maps Discovery worker for that)
  */
 
-const { Client } = require('@elastic/elasticsearch');
+const { Client } = require('@opensearch-project/opensearch');
 const { getCreatorDetails } = require('../../EpicGames/apis/popsAPI');
 const { initializeAuth, getAccessToken, getAccountId } = require('../utils/auth-helper');
+const { ProgressBar } = require('../utils/progress-bar');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
@@ -27,16 +28,14 @@ const ERROR_RETRY_DELAY = 5000;
 
 const clientConfig = {
   node: OPENSEARCH_HOST,
-  requestTimeout: 30000,
-  ssl: { rejectUnauthorized: false }
-};
-
-if (OPENSEARCH_USERNAME && OPENSEARCH_PASSWORD) {
-  clientConfig.auth = {
+  auth: {
     username: OPENSEARCH_USERNAME,
     password: OPENSEARCH_PASSWORD
-  };
-}
+  },
+  ssl: {
+    rejectUnauthorized: false
+  }
+};
 
 const es = new Client(clientConfig);
 
@@ -280,7 +279,7 @@ async function processCreator(creatorId) {
 
  } catch (error) {
  stats.errors++;
- console.error(`❌ Error processing creator ${creatorId}:`, error.message);
+ // Silently count errors - progress bar will show them
  return false;
  }
 }
@@ -314,12 +313,12 @@ async function runWorker() {
  }
  });
 
- scrollId = searchResponse._scroll_id;
- const totalCreators = searchResponse.hits.total.value;
+ scrollId = searchResponse.body._scroll_id;
+ const totalCreators = searchResponse.body.hits.total.value;
  console.log(` Total creators to process: ${totalCreators.toLocaleString()}`);
 
  // Collect all creator IDs
- let allCreatorIds = searchResponse.hits.hits.map(h => h._source.id);
+ let allCreatorIds = searchResponse.body.hits.hits.map(h => h._source.id);
 
  // Continue scrolling to get all creators
  while (true) {
@@ -328,8 +327,8 @@ async function runWorker() {
  scroll: '5m'
  });
 
- const moreCreators = scrollResponse.hits.hits.map(h => h._source.id);
- scrollId = scrollResponse._scroll_id;
+ const moreCreators = scrollResponse.body.hits.hits.map(h => h._source.id);
+ scrollId = scrollResponse.body._scroll_id;
 
  if (moreCreators.length === 0) break;
  allCreatorIds.push(...moreCreators);
@@ -342,10 +341,17 @@ async function runWorker() {
 
  console.log(` Processing in batches of ${BATCH_SIZE} (30/min rate limit)\n`);
 
+ // Create progress bar
+ const progress = new ProgressBar('Profiles', totalCreators);
+
+ // Reset error counter for this cycle
+ let cycleErrors = 0;
+
  // Process creators in parallel batches of 30 with staggered delays
  for (let i = 0; i < allCreatorIds.length; i += BATCH_SIZE) {
    const batch = allCreatorIds.slice(i, i + BATCH_SIZE);
    const batchStart = Date.now();
+   const previousErrors = stats.errors;
 
    // Process batch with 2.5-second stagger between each request to avoid rate limits
    // 24 requests * 2.5 seconds = 60 seconds total (24/min = safer than 30/min)
@@ -359,14 +365,24 @@ async function runWorker() {
    await Promise.all(promises);
 
    stats.processed += batch.length;
+   
+   // Calculate errors in this batch
+   const batchErrors = stats.errors - previousErrors;
+   cycleErrors += batchErrors;
 
-   // Log progress after each batch
-   const elapsed = ((Date.now() - stats.startTime) / 1000 / 60).toFixed(1);
-   const rate = (stats.processed / elapsed).toFixed(1);
-   console.log(` Processed: ${stats.processed.toLocaleString()}/${totalCreators.toLocaleString()} | Rate: ${rate}/min | Updated: ${stats.updated} | Deleted: ${stats.deleted} | Changes: ${stats.changeDetected} | Errors: ${stats.errors}`);
+   // Update progress bar
+   progress.update(stats.processed, {
+     Updated: stats.updated,
+     Deleted: stats.deleted,
+     Changes: stats.changeDetected,
+     Errors: cycleErrors
+   });
 
    // No additional wait needed since staggered delays already took ~60 seconds
  }
+ 
+ // Complete progress bar
+ progress.finish();
 
  console.log('✓ Ingestion cycle complete\n');
 

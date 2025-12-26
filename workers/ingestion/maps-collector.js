@@ -12,9 +12,10 @@
  * - Rate limit: 10 requests/minute
  */
 
-const { Client } = require('@elastic/elasticsearch');
+const { Client } = require('@opensearch-project/opensearch');
 const { getBulkMnemonicInfo } = require('../../EpicGames/apis/linksServiceAPI');
 const { initAuth, getValidToken } = require('../../EpicGames/auth/auth');
+const { ProgressBar } = require('../utils/progress-bar');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
@@ -31,16 +32,14 @@ const ERROR_RETRY_DELAY = 5000; // 5 seconds
 
 const clientConfig = {
   node: OPENSEARCH_HOST,
-  requestTimeout: 30000,
-  ssl: { rejectUnauthorized: false }
-};
-
-if (OPENSEARCH_USERNAME && OPENSEARCH_PASSWORD) {
-  clientConfig.auth = {
+  auth: {
     username: OPENSEARCH_USERNAME,
     password: OPENSEARCH_PASSWORD
-  };
-}
+  },
+  ssl: {
+    rejectUnauthorized: false
+  }
+};
 
 // Initialize OpenSearch client
 const es = new Client(clientConfig);
@@ -104,6 +103,10 @@ function detectChanges(oldDoc, newDoc) {
    if (field === 'genre_labels') return oldDoc.metadata?.genre_labels || oldDoc.genreLabels || [];
    if (field === 'category_labels') return oldDoc.metadata?.category_labels || oldDoc.categoryLabels || [];
    if (field === 'supportCode') return oldDoc.metadata?.supportCode || oldDoc.supportCode;
+   if (field === 'maxPlayers') return oldDoc.metadata?.matchmakingV2?.maxPlayers || oldDoc.maxPlayers;
+   if (field === 'minPlayers') return oldDoc.metadata?.matchmakingV2?.minPlayers || oldDoc.minPlayers;
+   if (field === 'esrbRating') return oldDoc.metadata?.ratings?.boards?.ESRB?.rating || oldDoc.contentRating;
+   if (field === 'mode') return oldDoc.metadata?.mode || oldDoc.mode;
    return oldDoc[field];
  };
 
@@ -115,6 +118,10 @@ function detectChanges(oldDoc, newDoc) {
    if (field === 'genre_labels') return newDoc.metadata?.genre_labels || [];
    if (field === 'category_labels') return newDoc.metadata?.category_labels || [];
    if (field === 'supportCode') return newDoc.metadata?.supportCode;
+   if (field === 'maxPlayers') return newDoc.metadata?.matchmakingV2?.maxPlayers;
+   if (field === 'minPlayers') return newDoc.metadata?.matchmakingV2?.minPlayers;
+   if (field === 'esrbRating') return newDoc.metadata?.ratings?.boards?.ESRB?.rating;
+   if (field === 'mode') return newDoc.metadata?.mode;
    return newDoc[field];
  };
 
@@ -184,6 +191,86 @@ function detectChanges(oldDoc, newDoc) {
 
  if (oldDoc.linkState !== newDoc.linkState) {
    changelog.linkState = { Old: oldDoc.linkState, New: newDoc.linkState };
+ }
+
+ // Check disabled status
+ if (oldDoc.disabled !== newDoc.disabled) {
+   changelog.disabled = { Old: oldDoc.disabled, New: newDoc.disabled };
+ }
+
+ // Check matchmaking player counts
+ if (getOldValue('maxPlayers') !== getNewValue('maxPlayers')) {
+   changelog.maxPlayers = { Old: getOldValue('maxPlayers'), New: getNewValue('maxPlayers') };
+ }
+
+ if (getOldValue('minPlayers') !== getNewValue('minPlayers')) {
+   changelog.minPlayers = { Old: getOldValue('minPlayers'), New: getNewValue('minPlayers') };
+ }
+
+ // Check ESRB rating
+ if (getOldValue('esrbRating') !== getNewValue('esrbRating')) {
+   changelog.esrbRating = { Old: getOldValue('esrbRating'), New: getNewValue('esrbRating') };
+ }
+
+ // Check mode
+ if (getOldValue('mode') !== getNewValue('mode')) {
+   changelog.mode = { Old: getOldValue('mode'), New: getNewValue('mode') };
+ }
+
+ // Check descriptionTags array
+ const oldDescTags = (oldDoc.descriptionTags || []).sort().join(',');
+ const newDescTags = (newDoc.descriptionTags || []).sort().join(',');
+ if (oldDescTags !== newDescTags) {
+   changelog.descriptionTags = { Old: oldDoc.descriptionTags || [], New: newDoc.descriptionTags || [] };
+ }
+
+ // Check activation dates
+ if (oldDoc.lastActivatedDate !== newDoc.lastActivatedDate) {
+   changelog.lastActivatedDate = { Old: oldDoc.lastActivatedDate, New: newDoc.lastActivatedDate };
+ }
+
+ const oldActivatedPublic = oldDoc.metadata?.activated_public_date;
+ const newActivatedPublic = newDoc.metadata?.activated_public_date;
+ if (oldActivatedPublic !== newActivatedPublic) {
+   changelog.activatedPublicDate = { Old: oldActivatedPublic, New: newActivatedPublic };
+ }
+
+ // Check timestamps from Epic
+ if (oldDoc.created !== newDoc.created) {
+   changelog.created = { Old: oldDoc.created, New: newDoc.created };
+ }
+
+ if (oldDoc.updated !== newDoc.updated) {
+   changelog.updated = { Old: oldDoc.updated, New: newDoc.updated };
+ }
+
+ // Check code (alternative linkcode field)
+ if (oldDoc.code !== newDoc.code) {
+   changelog.code = { Old: oldDoc.code, New: newDoc.code };
+ }
+
+ // Check projectId
+ const oldProjectId = oldDoc.metadata?.projectId;
+ const newProjectId = newDoc.metadata?.projectId;
+ if (oldProjectId !== newProjectId) {
+   changelog.projectId = { Old: oldProjectId, New: newProjectId };
+ }
+
+ // Check locale
+ const oldLocale = oldDoc.metadata?.locale;
+ const newLocale = newDoc.metadata?.locale;
+ if (oldLocale !== newLocale) {
+   changelog.locale = { Old: oldLocale, New: newLocale };
+ }
+
+ // Check ESRB descriptors
+ const oldEsrbDesc = (oldDoc.metadata?.ratings?.boards?.ESRB?.descriptors || []).sort().join(',');
+ const newEsrbDesc = (newDoc.metadata?.ratings?.boards?.ESRB?.descriptors || []).sort().join(',');
+ if (oldEsrbDesc !== newEsrbDesc) {
+   changelog.esrbDescriptors = { 
+     Old: oldDoc.metadata?.ratings?.boards?.ESRB?.descriptors || [], 
+     New: newDoc.metadata?.ratings?.boards?.ESRB?.descriptors || [] 
+   };
  }
 
  return Object.keys(changelog).length > 0 ? changelog : null;
@@ -398,57 +485,60 @@ async function processNewCreators(creatorList) {
 }
 
 /**
- * Fetch all map codes quickly - prioritize maps with recent activity
+ * Fetch all map codes from maps index
  */
 async function fetchAllMapCodes() {
- console.log(' Fetching all map codes...');
+ console.log(' Fetching all map codes from maps index...');
  const mapCodes = [];
  
  try {
- // First, get maps from recent CCU data (these are definitely active)
- console.log(' Fetching maps from recent CCU data (active maps)...');
- const ccuMaps = await es.search({
- index: 'concurrent-users-*',
- size: 0,
- body: {
- aggs: {
- unique_maps: {
- terms: {
- field: 'map_id.keyword',
- size: 50000 // Get up to 50k unique maps
- }
- }
- }
- }
- });
- 
- const ccuMapCodes = ccuMaps.aggregations.unique_maps.buckets.map(b => b.key);
- console.log(` Found ${ccuMapCodes.length} maps from CCU data`);
- mapCodes.push(...ccuMapCodes);
- 
- // Then get maps from discovery (featured maps)
- console.log(' Fetching maps from discovery data...');
- const discoveryMaps = await es.search({
- index: 'discovery-current',
- size: 10000,
- _source: ['map_id'],
+ // Fetch all maps using scroll API
+ let response = await es.search({
+ index: 'maps',
+ scroll: '5m',
+ size: SCROLL_SIZE,
+ _source: ['mnemonic'],
  body: {
  query: { match_all: {} }
  }
  });
  
- const discoveryMapCodes = discoveryMaps.hits.hits
- .map(hit => hit._source.map_id)
- .filter(id => id && !mapCodes.includes(id));
- console.log(` Found ${discoveryMapCodes.length} additional maps from discovery`);
- mapCodes.push(...discoveryMapCodes);
+ let scrollId = response.body._scroll_id || response._scroll_id;
+ let hits = response.body.hits?.hits || response.hits?.hits || [];
  
- // Deduplicate and validate format
- const uniqueMapCodes = [...new Set(mapCodes)]
- .filter(id => id && id.match(/^\d{4}-\d{4}-\d{4}$/));
+ // Add first batch
+ mapCodes.push(...hits.map(hit => hit._id).filter(id => id && id.match(/^\d{4}-\d{4}-\d{4}$/)));
  
- console.log(` ✓ Total unique valid map codes: ${uniqueMapCodes.length.toLocaleString()}\n`);
- return uniqueMapCodes;
+ console.log(` Loaded ${mapCodes.length.toLocaleString()} maps...`);
+ 
+ // Scroll through remaining batches
+ while (hits.length > 0) {
+ response = await es.scroll({
+ scroll_id: scrollId,
+ scroll: '5m'
+ });
+ 
+ scrollId = response.body._scroll_id || response._scroll_id;
+ hits = response.body.hits?.hits || response.hits?.hits || [];
+ 
+ if (hits.length > 0) {
+ mapCodes.push(...hits.map(hit => hit._id).filter(id => id && id.match(/^\d{4}-\d{4}-\d{4}$/)));
+ 
+ if (mapCodes.length % 50000 === 0) {
+ console.log(` Loaded ${mapCodes.length.toLocaleString()} maps...`);
+ }
+ }
+ }
+ 
+ // Clear scroll
+ try {
+ await es.clearScroll({ scroll_id: scrollId });
+ } catch (e) {
+ // Ignore errors clearing scroll
+ }
+ 
+ console.log(` ✓ Total map codes from index: ${mapCodes.length.toLocaleString()}\n`);
+ return mapCodes;
  } catch (error) {
  console.error('❌ Error fetching map codes:', error.message);
  return [];
@@ -504,6 +594,9 @@ async function runWorker() {
  console.log('⚙️  Processing maps in batches from Epic API...\n');
  console.log(`⚡ Rate limit: ${REQUESTS_PER_MINUTE} requests/min (${BATCH_SIZE} maps per request, ${BATCH_DELAY/1000}s delay)\n`);
  
+ // Create progress bar
+ const progress = new ProgressBar('Maps Collector', totalMaps);
+ 
  let allDocuments = [];
  let allChanges = [];
  let allNewCreators = [];
@@ -520,11 +613,15 @@ async function runWorker() {
  allChanges.push(...result.changes);
  allNewCreators.push(...result.newCreators);
 
- // Log progress
- const elapsed = ((Date.now() - stats.startTime) / 1000 / 60).toFixed(1);
- const rate = (stats.processed / elapsed).toFixed(0);
- const percentComplete = ((stats.processed / totalMaps) * 100).toFixed(1);
- console.log(`⏳ Progress: ${stats.processed.toLocaleString()}/${totalMaps.toLocaleString()} (${percentComplete}%) | Rate: ${rate}/min | Changes: ${stats.changeDetected} | Errors: ${stats.errors}`);
+ // Update progress bar
+ progress.update(stats.processed, {
+ changes: stats.changeDetected,
+ indexed: allDocuments.length
+ });
+ 
+ if (stats.errors > 0) {
+ progress.addError(stats.errors);
+ }
 
  // Bulk index accumulated documents
  if (allDocuments.length >= ES_BULK_SIZE) {

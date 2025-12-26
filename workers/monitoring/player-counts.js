@@ -12,10 +12,11 @@
  * - Timestamps are exact (on-the-dot: 8:00, 8:10, 8:20, etc.)
  */
 
-const { Client } = require('@elastic/elasticsearch');
+const { Client } = require('@opensearch-project/opensearch');
 const { getCreatorMaps } = require('../../EpicGames/apis/creatorPageAPI');
 const { getMnemonicInfo } = require('../../EpicGames/apis/mnemonicInfoAPI');
 const { initializeAuth, getAccessToken, getAccountId } = require('../utils/auth-helper');
+const { ProgressBar } = require('../utils/progress-bar');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
@@ -23,21 +24,20 @@ const OPENSEARCH_HOST = process.env.OPENSEARCH_HOST;
 const OPENSEARCH_USERNAME = process.env.OPENSEARCH_USERNAME;
 const OPENSEARCH_PASSWORD = process.env.OPENSEARCH_PASSWORD;
 const SNAPSHOT_INTERVAL_MINUTES = 10; // Take snapshot every 10 minutes
-const BATCH_SIZE = 50; // Process 50 creators concurrently
+const BATCH_SIZE = 100; // Process 100 creators concurrently (optimized for 150k creators)
+const BATCH_DELAY = 300; // 300ms delay between batches (ensures completion within 10 min)
 const BULK_INSERT_SIZE = 500; // Bulk insert every 500 records
 
 const clientConfig = {
   node: OPENSEARCH_HOST,
-  requestTimeout: 30000,
-  ssl: { rejectUnauthorized: false }
-};
-
-if (OPENSEARCH_USERNAME && OPENSEARCH_PASSWORD) {
-  clientConfig.auth = {
+  auth: {
     username: OPENSEARCH_USERNAME,
     password: OPENSEARCH_PASSWORD
-  };
-}
+  },
+  ssl: {
+    rejectUnauthorized: false
+  }
+};
 
 const es = new Client(clientConfig);
 
@@ -102,8 +102,8 @@ async function getAllCreators() {
  }
  });
 
- let scrollId = response._scroll_id;
- let hits = response.hits.hits;
+ let scrollId = response.body._scroll_id;
+ let hits = response.body.hits.hits;
 
  // Add first batch
  allCreators.push(...hits.map(hit => ({
@@ -118,8 +118,8 @@ async function getAllCreators() {
  scroll: scrollTimeout
  });
 
- scrollId = response._scroll_id;
- hits = response.hits.hits;
+ scrollId = response.body._scroll_id;
+ hits = response.body.hits.hits;
 
  if (hits.length > 0) {
  allCreators.push(...hits.map(hit => ({
@@ -264,6 +264,16 @@ async function runWorker() {
  // 1. Get all creators
  const creators = await getAllCreators();
  console.log(`📋 Found ${creators.length} creators to process`);
+ 
+ // Calculate estimated completion time
+ const estimatedBatches = Math.ceil(creators.length / BATCH_SIZE);
+ const estimatedDelayTime = (estimatedBatches * BATCH_DELAY) / 1000 / 60; // in minutes
+ const estimatedTotal = estimatedDelayTime + 1; // +1 min for processing
+ console.log(`⏱️  Estimated time: ${estimatedTotal.toFixed(1)} minutes (${estimatedBatches} batches × ${BATCH_DELAY}ms)`);
+ 
+ if (estimatedTotal > 9.5) {
+ console.log(`⚠️  WARNING: Estimated time may exceed 10-minute window!`);
+ }
 
  let totalMaps = 0;
  let processedCreators = 0;
@@ -271,11 +281,17 @@ async function runWorker() {
  let errors = 0;
  const currentMonth = new Date().toISOString().slice(0, 7);
 
+ // Initialize progress bar
+ const progress = new ProgressBar('CCU Snapshot', creators.length);
+
  // 2. Process creators in batches
  const bulkBuffer = [];
+ const totalBatches = Math.ceil(creators.length / BATCH_SIZE);
 
  for (let i = 0; i < creators.length; i += BATCH_SIZE) {
  const batch = creators.slice(i, i + BATCH_SIZE);
+ const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+ 
  const results = await processCreatorBatch(batch, accessToken, accountId, snapshotTime);
 
  // Collect results
@@ -284,9 +300,8 @@ async function runWorker() {
 
  if (result.error) {
  errors++;
- continue;
- }
-
+ progress.addError();
+ } else {
  totalMaps += result.maps_count;
 
  // Add CCU records to bulk buffer
@@ -298,6 +313,14 @@ async function runWorker() {
  ccuDataPoints++;
  }
  }
+ 
+ // Update progress
+ progress.update(processedCreators, {
+ Maps: totalMaps,
+ 'CCU Points': ccuDataPoints,
+ Errors: errors
+ });
+ }
 
  // Bulk insert when buffer is large enough
  if (bulkBuffer.length >= BULK_INSERT_SIZE * 2) {
@@ -308,13 +331,15 @@ async function runWorker() {
  console.error('❌ Bulk insert error:', error.message);
  }
  }
-
- // Log progress every 10 batches
- if ((i / BATCH_SIZE) % 10 === 0) {
- const progress = ((processedCreators / creators.length) * 100).toFixed(1);
- console.log(` Progress: ${processedCreators}/${creators.length} (${progress}%) | Maps: ${totalMaps} | CCU Points: ${ccuDataPoints} | Errors: ${errors}`);
+ 
+ // Add delay between batches to respect rate limits (except for last batch)
+ if (i + BATCH_SIZE < creators.length) {
+ await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
  }
  }
+ 
+ // Complete progress bar
+ progress.finish();
 
  // Insert remaining records
  if (bulkBuffer.length > 0) {
